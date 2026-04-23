@@ -16,9 +16,10 @@ namespace TaskManagementWidget.ViewModels
         public ObservableCollection<TaskItem> AllTasks { get; } = new();
 
         // ── Filtered / sorted views ──────────────────────────────────────────────
-        public ListCollectionView DoingView { get; }
-        public ListCollectionView TodoView  { get; }
-        public ListCollectionView DoneView  { get; }
+        public ListCollectionView DoingView   { get; }
+        public ListCollectionView OverdueView { get; }
+        public ListCollectionView TodoView    { get; }
+        public ListCollectionView DoneView    { get; }
 
         // ── Completed section collapse state ─────────────────────────────────────
         private bool _isCompletedExpanded = true;
@@ -49,15 +50,22 @@ namespace TaskManagementWidget.ViewModels
                 AllTasks.Add(t);
             }
 
-            // ── Doing view: status == Doing, sorted by manual drag order ────────────
+            // ── Doing view: status == Doing AND not overdue, sorted by manual drag order ─
             DoingView = (ListCollectionView)CollectionViewSource.GetDefaultView(AllTasks);
             DoingView = new ListCollectionView(AllTasks);
-            DoingView.Filter = o => o is TaskItem t && t.Status == Models.TaskStatus.Doing;
+            DoingView.Filter = o => o is TaskItem t && t.Status == Models.TaskStatus.Doing
+                                    && !IsOverdue(t);
             DoingView.SortDescriptions.Add(new SortDescription(nameof(TaskItem.ManualOrder), ListSortDirection.Ascending));
 
-            // ── Todo view: status == ToDo, sorted by manual drag order ─────────────────
+            // ── Overdue view: non-completed tasks with a past deadline ────────────────
+            OverdueView = new ListCollectionView(AllTasks);
+            OverdueView.Filter = o => o is TaskItem t && IsOverdue(t);
+            OverdueView.SortDescriptions.Add(new SortDescription(nameof(TaskItem.Importance), ListSortDirection.Descending));
+
+            // ── Todo view: status == ToDo AND not overdue, sorted by manual drag order ──
             TodoView = new ListCollectionView(AllTasks);
-            TodoView.Filter = o => o is TaskItem t && t.Status == Models.TaskStatus.ToDo;
+            TodoView.Filter = o => o is TaskItem t && t.Status == Models.TaskStatus.ToDo
+                                   && !IsOverdue(t);
             TodoView.SortDescriptions.Add(new SortDescription(nameof(TaskItem.ManualOrder), ListSortDirection.Ascending));
 
             // ── Done view: status == Completed ───────────────────────────────────
@@ -74,7 +82,7 @@ namespace TaskManagementWidget.ViewModels
             // Keep ticking every minute while the app is open
             var tickerTimer = new System.Windows.Threading.DispatcherTimer
                 { Interval = TimeSpan.FromMinutes(1) };
-            tickerTimer.Tick += (_, _) => ApplyTickers();
+            tickerTimer.Tick += (_, _) => { ApplyTickers(); RefreshViews(); };
             tickerTimer.Start();
         }
 
@@ -85,6 +93,15 @@ namespace TaskManagementWidget.ViewModels
             if (task.CreatedAt == default) task.CreatedAt = DateTime.UtcNow;
             Subscribe(task);
             AllTasks.Add(task);
+            RefreshViews();
+            Save();
+        }
+
+        // ── Set status directly ──────────────────────────────────────────────────
+        public void SetStatus(TaskItem task, Models.TaskStatus status)
+        {
+            if (task.Status == status) return;
+            task.Status = status;
             RefreshViews();
             Save();
         }
@@ -189,16 +206,25 @@ namespace TaskManagementWidget.ViewModels
         {
             RecalculateBadgeColors();
             DoingView.Refresh();
+            OverdueView.Refresh();
             TodoView.Refresh();
             DoneView.Refresh();
             OnPropertyChanged(nameof(HasDoingTasks));
+            OnPropertyChanged(nameof(HasOverdueTasks));
             OnPropertyChanged(nameof(HasTodoTasks));
             OnPropertyChanged(nameof(HasDoneTasks));
         }
 
-        public bool HasDoingTasks => DoingView.Count > 0;
-        public bool HasTodoTasks  => TodoView.Count  > 0;
-        public bool HasDoneTasks  => DoneView.Count  > 0;
+        public bool HasDoingTasks   => DoingView.Count   > 0;
+        public bool HasOverdueTasks => OverdueView.Count > 0;
+        public bool HasTodoTasks    => TodoView.Count    > 0;
+        public bool HasDoneTasks    => DoneView.Count    > 0;
+
+        // ── Overdue helper ───────────────────────────────────────────────────────
+        private static bool IsOverdue(TaskItem t)
+            => t.Deadline.HasValue
+               && t.Deadline.Value < DateTime.UtcNow
+               && t.Status != Models.TaskStatus.Completed;
 
         // ── Importance ticker ────────────────────────────────────────────────────
         private void ApplyTickers()

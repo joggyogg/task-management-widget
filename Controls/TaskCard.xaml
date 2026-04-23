@@ -58,10 +58,19 @@
             Visibility="Collapsed"/>
 
     <Border x:Name="CardBorder"
-            Background="{DynamicResource WidgetFrameBrush}"
             CornerRadius="12"
             Padding="8"
             Margin="0,0,0,10">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource WidgetFrameBrush}"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="#20FFFFFF"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
         <StackPanel>
 
             <Grid>

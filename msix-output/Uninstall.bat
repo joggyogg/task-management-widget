@@ -1,12 +1,19 @@
 @echo off
-setlocal
 
-:: Self-elevate if not already admin (needed for LocalMachine cert cleanup)
-net session >nul 2>&1
-if %errorLevel% neq 0 (
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    exit /b
-)
+echo Stopping running instance...
+taskkill /IM TaskManagementWidget.exe /F >nul 2>&1
+
+echo Removing auto-start entry...
+powershell -NoProfile -NonInteractive -Command ^
+  "Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'" ^
+  " -Name 'TaskManagementWidget' -ErrorAction SilentlyContinue"
+
+echo.
+echo Uninstalled. Your saved tasks in AppData are untouched.
+echo To also delete saved tasks, remove: %%APPDATA%%\TaskManagementWidget\
+echo.
+pause
+
 
 echo Removing auto-start entry...
 powershell -NoProfile -NonInteractive -Command ^

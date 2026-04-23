@@ -70,13 +70,15 @@ namespace TaskManagementWidget
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             _vm = new MainViewModel();
-            DoingList.ItemsSource = _vm.DoingView;
-            TodoList.ItemsSource  = _vm.TodoView;
-            DoneList.ItemsSource  = _vm.DoneView;
+            DoingList.ItemsSource   = _vm.DoingView;
+            OverdueList.ItemsSource = _vm.OverdueView;
+            TodoList.ItemsSource    = _vm.TodoView;
+            DoneList.ItemsSource    = _vm.DoneView;
 
             _vm.PropertyChanged += (_, args) =>
             {
                 if (args.PropertyName is nameof(MainViewModel.HasDoingTasks)
+                                      or nameof(MainViewModel.HasOverdueTasks)
                                       or nameof(MainViewModel.HasTodoTasks)
                                       or nameof(MainViewModel.HasDoneTasks))
                     UpdateSectionVisibility();
@@ -222,9 +224,10 @@ namespace TaskManagementWidget
 
         private void UpdateSectionVisibility()
         {
-            DoingSection.Visibility = _vm.HasDoingTasks ? Visibility.Visible : Visibility.Collapsed;
-            TodoSection.Visibility  = _vm.HasTodoTasks  ? Visibility.Visible : Visibility.Collapsed;
-            DoneSection.Visibility  = _vm.HasDoneTasks  ? Visibility.Visible : Visibility.Collapsed;
+            DoingSection.Visibility   = _vm.HasDoingTasks   ? Visibility.Visible : Visibility.Collapsed;
+            OverdueSection.Visibility = _vm.HasOverdueTasks ? Visibility.Visible : Visibility.Collapsed;
+            TodoSection.Visibility    = _vm.HasTodoTasks    ? Visibility.Visible : Visibility.Collapsed;
+            DoneSection.Visibility    = _vm.HasDoneTasks    ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void AddTaskBtn_Click(object sender, RoutedEventArgs e)
@@ -234,7 +237,8 @@ namespace TaskManagementWidget
                 _vm.AddTask(dlg.Result);
         }
 
-        private void Card_StatusChangeRequested(object sender, TaskItem task) => _vm.CycleStatus(task);
+        private void Card_StatusSetRequested(object sender, (TaskItem task, TaskManagementWidget.Models.TaskStatus status) e)
+            => _vm.SetStatus(e.task, e.status);
 
         private void Card_EditRequested(object sender, TaskItem task)
         {

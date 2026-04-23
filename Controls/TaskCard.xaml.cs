@@ -21,8 +21,10 @@ namespace TaskManagementWidget.Controls
             set => SetValue(TaskProperty, value);
         }
 
-        public event EventHandler<TaskItem>? StatusChangeRequested;
         public event EventHandler<TaskItem>? EditRequested;
+
+        // Status set event — carries the desired new status
+        public event EventHandler<(TaskItem task, TaskStatus status)>? StatusSetRequested;
 
         // ── Drag-ghost feed (static so MainWindow can subscribe once) ────────────
         public static event Action<TaskItem>?            DragGhostStarted;
@@ -239,7 +241,83 @@ namespace TaskManagementWidget.Controls
         }
 
         private void StatusButton_Click(object sender, RoutedEventArgs e)
-            => StatusChangeRequested?.Invoke(this, Task!);
+        {
+            if (Task == null) return;
+
+            var menu = new System.Windows.Controls.ContextMenu();
+            menu.Background      = new SolidColorBrush(Color.FromArgb(0xBF, 0x24, 0x27, 0x3A));
+            menu.BorderBrush     = new SolidColorBrush(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF));
+            menu.BorderThickness = new Thickness(1);
+            menu.HasDropShadow   = false;
+
+            // Rounded-corner template
+            var menuTemplate = new System.Windows.Controls.ControlTemplate(typeof(System.Windows.Controls.ContextMenu));
+            var borderFactory = new FrameworkElementFactory(typeof(Border));
+            borderFactory.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromArgb(0xBF, 0x24, 0x27, 0x3A)));
+            borderFactory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF)));
+            borderFactory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+            borderFactory.SetValue(Border.PaddingProperty, new Thickness(4));
+            var itemsPresenterFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ItemsPresenter));
+            borderFactory.AppendChild(itemsPresenterFactory);
+            menuTemplate.VisualTree = borderFactory;
+            menu.Template = menuTemplate;
+
+            (string label, TaskStatus s)[] options =
+            {
+                ("To Do",     TaskStatus.ToDo),
+                ("Doing",     TaskStatus.Doing),
+                ("Completed", TaskStatus.Completed),
+            };
+
+            foreach (var (label, s) in options)
+            {
+                var isCurrent = s == Task.Status;
+
+                // Build a custom template: rounded hover highlight, no arrow
+                var itemTemplate = new System.Windows.Controls.ControlTemplate(typeof(System.Windows.Controls.MenuItem));
+                var itemBorder   = new FrameworkElementFactory(typeof(Border));
+                itemBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+                itemBorder.SetValue(Border.PaddingProperty, new Thickness(12, 6, 12, 6));
+                // Bind border background to MenuItem.Background so the hover trigger drives it
+                itemBorder.SetBinding(Border.BackgroundProperty,
+                    new System.Windows.Data.Binding("Background")
+                    { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
+                var itemContent = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
+                itemContent.SetValue(System.Windows.Controls.ContentPresenter.ContentSourceProperty, "Header");
+                itemContent.SetValue(System.Windows.Controls.ContentPresenter.RecognizesAccessKeyProperty, true);
+                itemBorder.AppendChild(itemContent);
+                itemTemplate.VisualTree = itemBorder;
+
+                // Hover trigger — sets Background on the MenuItem itself (no TargetName needed)
+                var hoverTrigger = new Trigger { Property = System.Windows.Controls.MenuItem.IsHighlightedProperty, Value = true };
+                hoverTrigger.Setters.Add(new Setter(System.Windows.Controls.MenuItem.BackgroundProperty,
+                    new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF))));
+                itemTemplate.Triggers.Add(hoverTrigger);
+                var mouseOverTrigger = new Trigger { Property = System.Windows.Controls.MenuItem.IsMouseOverProperty, Value = true };
+                mouseOverTrigger.Setters.Add(new Setter(System.Windows.Controls.MenuItem.BackgroundProperty,
+                    new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF))));
+                itemTemplate.Triggers.Add(mouseOverTrigger);
+
+                var item = new System.Windows.Controls.MenuItem
+                {
+                    Header     = label,
+                    Foreground = isCurrent
+                        ? new SolidColorBrush(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF))
+                        : new SolidColorBrush(Color.FromRgb(0xCD, 0xD6, 0xF4)),
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    IsEnabled  = !isCurrent,
+                    Template   = itemTemplate,
+                };
+                var capture = s;
+                item.Click += (_, _) => StatusSetRequested?.Invoke(this, (Task, capture));
+                menu.Items.Add(item);
+            }
+
+            menu.PlacementTarget = StatusButton;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen    = true;
+        }
 
         private void EditButton_Click(object sender, RoutedEventArgs e)
             => EditRequested?.Invoke(this, Task!);
