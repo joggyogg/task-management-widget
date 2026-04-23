@@ -1,0 +1,158 @@
+﻿<UserControl x:Class="TaskManagementWidget.Controls.TaskCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+
+    <UserControl.Resources>
+        <Style x:Key="PillBtn" TargetType="Button">
+            <Setter Property="Padding"         Value="6,2"/>
+            <Setter Property="FontSize"        Value="10"/>
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="#80FFFFFF"/>
+            <Setter Property="BorderBrush"     Value="#80FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="IconBtn" TargetType="Button">
+            <Setter Property="Padding"         Value="1"/>
+            <Setter Property="FontSize"        Value="10"/>
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="#80FFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border x:Name="CardBorder"
+            Background="{DynamicResource WidgetFrameBrush}"
+            CornerRadius="12"
+            Padding="8"
+            Margin="0,0,0,10">
+        <StackPanel>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="47"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        x:Name="BadgeBorder"
+                        Width="47" Height="47"
+                        CornerRadius="4"
+                        VerticalAlignment="Center"
+                        Cursor="SizeAll"
+                        MouseLeftButtonDown="Badge_MouseLeftButtonDown"
+                        MouseMove="Badge_MouseMove">
+                    <TextBlock x:Name="ImportanceText"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="15"
+                               FontWeight="Bold"
+                               Foreground="#1E1E2E"
+                               IsHitTestVisible="False"/>
+                </Border>
+
+                <Grid Grid.Column="1" Margin="10,0,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               x:Name="NameText"
+                               Foreground="White"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"/>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button x:Name="StatusButton"
+                                Style="{StaticResource PillBtn}"
+                                Click="StatusButton_Click"/>
+                        <Button x:Name="LinkButton"
+                                Style="{StaticResource PillBtn}"
+                                Visibility="Collapsed"
+                                Margin="5,0,0,0"
+                                Click="LinkButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F517;" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Open Link" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <TextBlock x:Name="AgeText"
+                                   FontSize="10"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Column="2" Margin="6,0,0,0" Width="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Button Grid.Row="0"
+                            x:Name="EditButton"
+                            Content="&#x270F;"
+                            Style="{StaticResource IconBtn}"
+                            VerticalAlignment="Top"
+                            Click="EditButton_Click"/>
+
+                    <Button Grid.Row="1"
+                            x:Name="ExpandButton"
+                            Content="&#x25BE;"
+                            Style="{StaticResource IconBtn}"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Bottom"
+                            Click="ExpandButton_Click"/>
+                </Grid>
+            </Grid>
+
+            <Border x:Name="DescriptionPanel"
+                    Visibility="Collapsed"
+                    Margin="0,8,0,0"
+                    Height="80"
+                    Background="#1AFFFFFF"
+                    CornerRadius="8">
+                <TextBox x:Name="DescriptionText"
+                         Background="Transparent"
+                         Foreground="#CCFFFFFF"
+                         FontSize="12"
+                         BorderThickness="0"
+                         TextWrapping="Wrap"
+                         IsReadOnly="True"
+                         VerticalScrollBarVisibility="Hidden"
+                         Padding="8,6"
+                         VerticalAlignment="Top"/>
+            </Border>
+
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,29 @@
+## Visual Studio / .NET
+
+# Build results
+bin/
+obj/
+publish/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# NuGet
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+packages/
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Compiled MSIX output (tracked via Git LFS — see .gitattributes)
+# msix-output/ is intentionally NOT ignored so the .msix is versioned via LFS
