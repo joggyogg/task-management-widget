@@ -1,7 +1,8 @@
 ﻿<UserControl x:Class="TaskManagementWidget.Controls.TaskCard"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Name="Root">
+             x:Name="Root"
+             AllowDrop="True">
 
     <UserControl.Resources>
         <Style x:Key="PillBtn" TargetType="Button">
@@ -45,6 +46,16 @@
             </Setter>
         </Style>
     </UserControl.Resources>
+
+    <StackPanel>
+
+    <!-- Insertion indicator shown when another card is dragged to this position -->
+    <Border x:Name="DropIndicatorBorder"
+            Height="3"
+            CornerRadius="1.5"
+            Background="#64E0F6"
+            Margin="4,0,4,4"
+            Visibility="Collapsed"/>
 
     <Border x:Name="CardBorder"
             Background="{DynamicResource WidgetFrameBrush}"
@@ -155,4 +166,6 @@
 
         </StackPanel>
     </Border>
+
+    </StackPanel>
 </UserControl>

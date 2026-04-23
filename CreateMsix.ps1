@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$projectDir  = "c:\Users\joggy\Documents\Task Management Widget"
+$projectDir  = "c:\Users\joggy\Documents\Task Management Widget\task-management-widget"
 $publishDir  = "$projectDir\publish"
 $msixDir     = "$projectDir\msix-output"
 $pkgLayout   = "$msixDir\PackageLayout"

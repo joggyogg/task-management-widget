@@ -24,6 +24,24 @@ namespace TaskManagementWidget.Controls
         public event EventHandler<TaskItem>? StatusChangeRequested;
         public event EventHandler<TaskItem>? EditRequested;
 
+        // ── Drag-ghost feed (static so MainWindow can subscribe once) ────────────
+        public static event Action<TaskItem>?            DragGhostStarted;
+        public static event Action<System.Drawing.Point>? DragGhostMoved;
+        public static event Action?                      DragEnded;
+
+        // ── Drop indicator ───────────────────────────────────────────────────────
+        public static readonly DependencyProperty ShowDropIndicatorProperty =
+            DependencyProperty.Register(nameof(ShowDropIndicator), typeof(bool), typeof(TaskCard),
+                new PropertyMetadata(false, (d, e) =>
+                    ((TaskCard)d).DropIndicatorBorder.Visibility =
+                        (bool)e.NewValue ? Visibility.Visible : Visibility.Collapsed));
+
+        public bool ShowDropIndicator
+        {
+            get => (bool)GetValue(ShowDropIndicatorProperty);
+            set => SetValue(ShowDropIndicatorProperty, value);
+        }
+
         private Point  _dragStart;
         private bool   _isDragging;
         private bool   _expanded;
@@ -96,12 +114,43 @@ namespace TaskManagementWidget.Controls
 
         private void RefreshAge(TaskItem t)
         {
+            // ── Deadline countdown takes priority over age ────────────────────────
+            if (t.Deadline.HasValue)
+            {
+                AgeText.Visibility = Visibility.Visible;
+                var remaining = t.Deadline.Value - DateTime.UtcNow;
+                if (remaining.TotalSeconds <= 0)
+                {
+                    AgeText.Text       = "OVERDUE";
+                    AgeText.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x5A, 0x57));
+                }
+                else
+                {
+                    int dDays = (int)remaining.TotalDays;
+                    AgeText.Text = dDays > 0
+                        ? $"{dDays}d {remaining.Hours}h"
+                        : remaining.TotalHours >= 1
+                            ? $"{(int)remaining.TotalHours}h {remaining.Minutes}m"
+                            : $"{remaining.Minutes}m";
+
+                    AgeText.Foreground = remaining.TotalDays switch
+                    {
+                        < 1 => new SolidColorBrush(Color.FromRgb(0xE0, 0x5A, 0x57)),
+                        < 3 => new SolidColorBrush(Color.FromRgb(0xE0, 0x7B, 0x57)),
+                        < 7 => new SolidColorBrush(Color.FromRgb(0xE0, 0xC8, 0x57)),
+                        _   => new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF))
+                    };
+                }
+                return;
+            }
+
+            // ── Age display ───────────────────────────────────────────────────────
             if (t.CreatedAt == default)
             {
                 AgeText.Visibility = Visibility.Collapsed;
                 return;
             }
-            var age = DateTime.UtcNow - t.CreatedAt;
+            var age     = DateTime.UtcNow - t.CreatedAt;
             int days    = (int)age.TotalDays;
             int hours   = age.Hours;
             int minutes = age.Minutes;
@@ -144,7 +193,7 @@ namespace TaskManagementWidget.Controls
 
         private void Badge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (Task?.Status != TaskStatus.ToDo) return;
+            if (Task?.Status == TaskStatus.Completed) return;  // Completed tasks are not draggable
             _dragStart  = e.GetPosition(this);
             _isDragging = false;
             BadgeBorder.CaptureMouse();
@@ -162,7 +211,23 @@ namespace TaskManagementWidget.Controls
 
             _isDragging = true;
             BadgeBorder.ReleaseMouseCapture();
-            if (Task != null) DragDrop.DoDragDrop(this, Task, DragDropEffects.Move);
+
+            if (Task != null)
+            {
+                DragGhostStarted?.Invoke(Task);
+
+                System.Windows.GiveFeedbackEventHandler feedbackHandler = (_, fe) =>
+                {
+                    DragGhostMoved?.Invoke(System.Windows.Forms.Cursor.Position);
+                    fe.UseDefaultCursors = true;
+                    fe.Handled           = false;
+                };
+                DragDrop.AddGiveFeedbackHandler(this, feedbackHandler);
+                DragDrop.DoDragDrop(this, Task, DragDropEffects.Move);
+                DragDrop.RemoveGiveFeedbackHandler(this, feedbackHandler);
+                DragEnded?.Invoke();
+            }
+
             _isDragging = false;
         }
 

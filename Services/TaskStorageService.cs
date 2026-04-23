@@ -8,11 +8,8 @@ namespace TaskManagementWidget.Services
 {
     public static class TaskStorageService
     {
-        private static readonly string FilePath = GetRealRoamingFilePath();
-        private static readonly string LegacyFilePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "TaskManagementWidget",
-            "tasks.json");
+        private static readonly string FilePath = BuildFilePath();
+        public static string? LastSaveError { get; private set; }
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -24,7 +21,6 @@ namespace TaskManagementWidget.Services
         {
             try
             {
-                MigrateLegacyDataIfNeeded();
                 if (!File.Exists(FilePath)) return new List<TaskItem>();
                 var json = File.ReadAllText(FilePath);
                 return JsonSerializer.Deserialize<List<TaskItem>>(json, JsonOptions)
@@ -44,40 +40,25 @@ namespace TaskManagementWidget.Services
                 Directory.CreateDirectory(dir);
                 var json = JsonSerializer.Serialize(tasks, JsonOptions);
                 File.WriteAllText(FilePath, json);
+                LastSaveError = null;
             }
-            catch { /* swallow — non-critical */ }
+            catch (Exception ex)
+            {
+                LastSaveError = $"{ex.GetType().Name}: {ex.Message} (path: {FilePath})";
+            }
         }
 
-        private static string GetRealRoamingFilePath()
+        private static string BuildFilePath()
         {
-            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (string.IsNullOrWhiteSpace(userProfile))
-            {
-                return Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "TaskManagementWidget",
-                    "tasks.json");
-            }
+            // SpecialFolder.ApplicationData resolves correctly on all Windows configurations,
+            // including domain-joined machines with redirected folder policies.
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
-            return Path.Combine(userProfile, "AppData", "Roaming", "TaskManagementWidget", "tasks.json");
-        }
+            if (!string.IsNullOrWhiteSpace(appData))
+                return Path.Combine(appData, "TaskManagementWidget", "tasks.json");
 
-        private static void MigrateLegacyDataIfNeeded()
-        {
-            try
-            {
-                if (File.Exists(FilePath)) return;
-                if (string.Equals(FilePath, LegacyFilePath, StringComparison.OrdinalIgnoreCase)) return;
-                if (!File.Exists(LegacyFilePath)) return;
-
-                var dir = Path.GetDirectoryName(FilePath)!;
-                Directory.CreateDirectory(dir);
-                File.Copy(LegacyFilePath, FilePath, overwrite: false);
-            }
-            catch
-            {
-                // Ignore migration failures and continue with normal startup.
-            }
+            // Fallback: store next to the executable if AppData is unavailable.
+            return Path.Combine(AppContext.BaseDirectory, "tasks.json");
         }
     }
 }

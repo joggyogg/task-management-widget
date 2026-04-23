@@ -83,6 +83,37 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
+        <!-- Drag-preview ghost popup: follows cursor, shown while dragging -->
+        <Popup x:Name="GhostPopup"
+               Placement="RelativePoint"
+               AllowsTransparency="True"
+               IsOpen="False"
+               IsHitTestVisible="False">
+            <Border CornerRadius="10"
+                    Background="#E01E1E2E"
+                    BorderBrush="#6064E0F6"
+                    BorderThickness="1"
+                    Padding="8,5">
+                <StackPanel Orientation="Horizontal">
+                    <Border x:Name="GhostBadge"
+                            Width="30" Height="30"
+                            CornerRadius="4"
+                            VerticalAlignment="Center">
+                        <TextBlock x:Name="GhostImportanceText"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="12" FontWeight="Bold"
+                                   Foreground="#1E1E2E"/>
+                    </Border>
+                    <TextBlock x:Name="GhostNameText"
+                               Foreground="White" FontSize="12" FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Margin="7,0,0,0" MaxWidth="170"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Border>
+        </Popup>
+
         <!-- Add tab — sticks out to the left of the main frame -->
         <Button Grid.Column="0"
                 Content="+"
@@ -113,14 +144,20 @@
                             <TextBlock Grid.Column="1" Text="Doing" Foreground="#80FFFFFF" FontSize="11" FontWeight="SemiBold" Margin="8,0"/>
                             <Rectangle Grid.Column="2" Height="1" Fill="#40FFFFFF" VerticalAlignment="Center"/>
                         </Grid>
-                        <ItemsControl x:Name="DoingList" AllowDrop="True">
+                        <ItemsControl x:Name="DoingList"
+                                      AllowDrop="True"
+                                      Background="Transparent"
+                                      DragOver="List_DragOver"
+                                      Drop="List_Drop">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <ctrl:TaskCard Task="{Binding}"
                                                    StatusChangeRequested="Card_StatusChangeRequested"
                                                    EditRequested="Card_EditRequested"
-                                                   Drop="List_Drop"
-                                                   AllowDrop="True"/>
+                                                   AllowDrop="True"
+                                                   DragOver="Card_DragOver"
+                                                   DragLeave="Card_DragLeave"
+                                                   Drop="Card_Drop"/>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -139,15 +176,18 @@
                         </Grid>
                         <ItemsControl x:Name="TodoList"
                                       AllowDrop="True"
-                                      Drop="List_Drop"
-                                      DragOver="List_DragOver">
+                                      Background="Transparent"
+                                      DragOver="List_DragOver"
+                                      Drop="List_Drop">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <ctrl:TaskCard Task="{Binding}"
                                                    StatusChangeRequested="Card_StatusChangeRequested"
                                                    EditRequested="Card_EditRequested"
-                                                   Drop="List_Drop"
-                                                   AllowDrop="True"/>
+                                                   AllowDrop="True"
+                                                   DragOver="Card_DragOver"
+                                                   DragLeave="Card_DragLeave"
+                                                   Drop="Card_Drop"/>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

@@ -80,6 +80,37 @@ namespace TaskManagementWidget.Models
             set { _createdAt = value; OnPropertyChanged(); }
         }
 
+        // ── Importance ticker ────────────────────────────────────────────────────
+        private int?    _tickerPoints;
+        private double? _tickerHours;
+
+        /// <summary>Points added per tick.</summary>
+        public int? TickerPoints
+        {
+            get => _tickerPoints;
+            set { _tickerPoints = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Hours between each tick.</summary>
+        public double? TickerHours
+        {
+            get => _tickerHours;
+            set { _tickerHours = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>UTC time of the last applied tick (bookkeeping — not displayed).</summary>
+        public DateTime? TickerLastApplied { get; set; }
+
+        // ── Deadline ─────────────────────────────────────────────────────────────
+        private DateTime? _deadline;
+
+        /// <summary>Optional UTC deadline. Shows countdown on card instead of age.</summary>
+        public DateTime? Deadline
+        {
+            get => _deadline;
+            set { _deadline = value; OnPropertyChanged(); }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected void OnPropertyChanged([CallerMemberName] string? name = null)

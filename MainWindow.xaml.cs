@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using TaskManagementWidget.Controls;
 using TaskManagementWidget.Models;
 using TaskManagementWidget.ViewModels;
@@ -61,6 +62,9 @@ namespace TaskManagementWidget
         private MONITORINFO    _mi;
         private System.Windows.Forms.NotifyIcon _trayIcon = null!;
 
+        // ── Drag-and-drop state ──────────────────────────────────────────────────
+        private TaskCard? _indicatorCard;
+
         public MainWindow() { InitializeComponent(); }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -81,6 +85,27 @@ namespace TaskManagementWidget
             UpdateSectionVisibility();
             UpdateMaxHeight();
             InitTrayIcon();
+
+            // ── Ghost popup driven by GiveFeedback on the drag source ──────────────
+            TaskManagementWidget.Controls.TaskCard.DragGhostStarted += task =>
+            {
+                GhostNameText.Text       = task.Name;
+                GhostImportanceText.Text = task.Importance.ToString();
+                GhostBadge.Background    = GetBadgeBrush(task.BadgeT);
+            };
+            TaskManagementWidget.Controls.TaskCard.DragGhostMoved += pt =>
+            {
+                GhostPopup.IsOpen              = true;
+                GhostPopup.Placement           = System.Windows.Controls.Primitives.PlacementMode.AbsolutePoint;
+                GhostPopup.PlacementTarget     = null;
+                GhostPopup.HorizontalOffset    = pt.X + 14;
+                GhostPopup.VerticalOffset      = pt.Y + 14;
+            };
+            TaskManagementWidget.Controls.TaskCard.DragEnded += () =>
+            {
+                GhostPopup.IsOpen = false;
+                ClearDropIndicator();
+            };
         }
 
         private void InitTrayIcon()
@@ -223,23 +248,95 @@ namespace TaskManagementWidget
             }
         }
 
+        // ── Per-card drag handlers (reliable: fires when cursor is over the card) ────
+        private void Card_DragOver(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(typeof(TaskItem))) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+            var dragged = (TaskItem)e.Data.GetData(typeof(TaskItem));
+            var card    = (TaskCard)sender;
+            if (card.Task == null || card.Task.Status != dragged.Status) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+
+            e.Effects = DragDropEffects.Move;
+            e.Handled = true;
+
+            if (_indicatorCard != card)
+            {
+                ClearDropIndicator();
+                if (card.Task != dragged)   // don’t show indicator on the card being dragged
+                {
+                    card.ShowDropIndicator = true;
+                    _indicatorCard = card;
+                }
+            }
+        }
+
+        private void Card_DragLeave(object sender, DragEventArgs e)
+        {
+            // Only clear if cursor actually left the card’s bounds
+            var card = (TaskCard)sender;
+            var pos  = e.GetPosition(card);
+            if (pos.X < 0 || pos.Y < 0 || pos.X > card.ActualWidth || pos.Y > card.ActualHeight)
+                if (_indicatorCard == card) ClearDropIndicator();
+        }
+
+        private void Card_Drop(object sender, DragEventArgs e)
+        {
+            ClearDropIndicator();
+            if (!e.Data.GetDataPresent(typeof(TaskItem))) return;
+            var dragged = (TaskItem)e.Data.GetData(typeof(TaskItem));
+            var card    = (TaskCard)sender;
+            if (card.Task == null || card.Task == dragged) return;
+            if (dragged.Status != card.Task.Status) return;
+
+            _vm.ReorderTask(dragged, card.Task);
+            e.Handled = true;
+        }
+
+        // ── List-level handlers (fire for empty space below all cards) ─────────
         private void List_DragOver(object sender, DragEventArgs e)
         {
+            if (e.Handled) return;
             e.Effects = e.Data.GetDataPresent(typeof(TaskItem)) ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
         }
 
         private void List_Drop(object sender, DragEventArgs e)
         {
+            if (e.Handled) return;  // card already handled it
+            ClearDropIndicator();
             if (!e.Data.GetDataPresent(typeof(TaskItem))) return;
-            var dragged = (TaskItem)e.Data.GetData(typeof(TaskItem));
+            var dragged      = (TaskItem)e.Data.GetData(typeof(TaskItem));
+            var list         = (ItemsControl)sender;
+            var targetStatus = list == DoingList ? TaskStatus.Doing : TaskStatus.ToDo;
+            if (dragged.Status != targetStatus) return;
 
-            TaskItem? target = (sender is TaskCard tc) ? tc.Task : null;
-            if (target == null || target == dragged) return;
-            if (dragged.Status != TaskStatus.ToDo || target.Status != TaskStatus.ToDo) return;
-
-            _vm.MoveToDoTask(dragged, target);
+            _vm.ReorderTask(dragged, null);  // insert at end of the list
             e.Handled = true;
+        }
+
+        private void ClearDropIndicator()
+        {
+            if (_indicatorCard != null) { _indicatorCard.ShowDropIndicator = false; _indicatorCard = null; }
+        }
+
+        private static SolidColorBrush GetBadgeBrush(double t)
+        {
+            if (t < 0) return new SolidColorBrush(Color.FromRgb(0x64, 0xE0, 0xF6));
+            t = Math.Clamp(t, 0, 1);
+            (byte R, byte G, byte B)[] stops =
+            {
+                (0x57, 0xE0, 0x5A), (0xC8, 0xE0, 0x57), (0xE0, 0xC8, 0x57),
+                (0xE0, 0x7B, 0x57), (0xE0, 0x5A, 0x57),
+            };
+            double pos = t * (stops.Length - 1);
+            int    i0  = (int)Math.Floor(pos);
+            int    i1  = Math.Min(i0 + 1, stops.Length - 1);
+            double s   = pos - i0;
+            static byte Lerp(byte a, byte b, double x) => (byte)Math.Round(a + (b - a) * x);
+            return new SolidColorBrush(Color.FromRgb(
+                Lerp(stops[i0].R, stops[i1].R, s),
+                Lerp(stops[i0].G, stops[i1].G, s),
+                Lerp(stops[i0].B, stops[i1].B, s)));
         }
 
         private bool _doneExpanded = true;
