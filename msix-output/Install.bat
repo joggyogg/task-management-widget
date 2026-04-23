@@ -21,5 +21,26 @@ powershell -NoProfile -NonInteractive -Command ^
   "Add-AppxPackage -Path '%~dp0TaskManagementWidget.msix' -ForceUpdateFromAnyVersion"
 
 echo.
-echo Done! Find "Task Management Widget" in the Start Menu.
+echo Enabling auto-start on sign-in...
+powershell -NoProfile -NonInteractive -Command ^
+  "$pkg = Get-AppxPackage -Name 'TaskManagementWidget' | Sort-Object Version -Descending | Select-Object -First 1;" ^
+  "if (-not $pkg) { throw 'TaskManagementWidget package not found after install.' }" ^
+  "$aumid = $pkg.PackageFamilyName + '!App';" ^
+  "$runValue = 'explorer.exe shell:AppsFolder\' + $aumid;" ^
+  "New-Item -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Force | Out-Null;" ^
+  "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'TaskManagementWidget' -Value $runValue -Type String;" ^
+  "Write-Host ('Auto-start entry created: ' + $runValue)"
+
+echo.
+echo Launching app now...
+powershell -NoProfile -NonInteractive -Command ^
+  "$pkg = Get-AppxPackage -Name 'TaskManagementWidget' | Sort-Object Version -Descending | Select-Object -First 1;" ^
+  "if ($pkg) {" ^
+  "  $aumid = $pkg.PackageFamilyName + '!App';" ^
+  "  Start-Process explorer.exe ('shell:AppsFolder\' + $aumid);" ^
+  "  Write-Host 'Task Management Widget launched.'" ^
+  "} else { Write-Host 'Could not launch app: package not found.' }"
+
+echo.
+echo Done! "Task Management Widget" is launched now and will also start automatically when you sign in to Windows.
 pause

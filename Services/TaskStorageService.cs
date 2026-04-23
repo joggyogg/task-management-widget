@@ -8,7 +8,8 @@ namespace TaskManagementWidget.Services
 {
     public static class TaskStorageService
     {
-        private static readonly string FilePath = Path.Combine(
+        private static readonly string FilePath = GetRealRoamingFilePath();
+        private static readonly string LegacyFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "TaskManagementWidget",
             "tasks.json");
@@ -23,6 +24,7 @@ namespace TaskManagementWidget.Services
         {
             try
             {
+                MigrateLegacyDataIfNeeded();
                 if (!File.Exists(FilePath)) return new List<TaskItem>();
                 var json = File.ReadAllText(FilePath);
                 return JsonSerializer.Deserialize<List<TaskItem>>(json, JsonOptions)
@@ -44,6 +46,38 @@ namespace TaskManagementWidget.Services
                 File.WriteAllText(FilePath, json);
             }
             catch { /* swallow — non-critical */ }
+        }
+
+        private static string GetRealRoamingFilePath()
+        {
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrWhiteSpace(userProfile))
+            {
+                return Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "TaskManagementWidget",
+                    "tasks.json");
+            }
+
+            return Path.Combine(userProfile, "AppData", "Roaming", "TaskManagementWidget", "tasks.json");
+        }
+
+        private static void MigrateLegacyDataIfNeeded()
+        {
+            try
+            {
+                if (File.Exists(FilePath)) return;
+                if (string.Equals(FilePath, LegacyFilePath, StringComparison.OrdinalIgnoreCase)) return;
+                if (!File.Exists(LegacyFilePath)) return;
+
+                var dir = Path.GetDirectoryName(FilePath)!;
+                Directory.CreateDirectory(dir);
+                File.Copy(LegacyFilePath, FilePath, overwrite: false);
+            }
+            catch
+            {
+                // Ignore migration failures and continue with normal startup.
+            }
         }
     }
 }
