@@ -329,7 +329,7 @@ namespace TaskManagementWidget
                     FormDeadlineEnabledBox.IsChecked = true;
                     var local = existing.Deadline.Value.ToLocalTime();
                     FormDeadlineCal.SelectedDate = local.Date;
-                    FormDateInlineLabel.Text = "Date | " + local.Date.ToString("MM/dd/yyyy");
+                    FormDateInlineLabel.Text = "Date | " + local.Date.ToString("dd/MM/yy");
                     FormDeadlineHourBox.SelectedIndex = local.Hour;
                 }
                 else
@@ -473,7 +473,7 @@ namespace TaskManagementWidget
         {
             if (FormDeadlineCal.SelectedDate.HasValue)
             {
-                FormDateInlineLabel.Text = "Date | " + FormDeadlineCal.SelectedDate.Value.ToString("MM/dd/yyyy");
+                FormDateInlineLabel.Text = "Date | " + FormDeadlineCal.SelectedDate.Value.ToString("dd/MM/yy");
                 FormDatePopup.IsOpen = false;
                 UpdatePreview();
             }

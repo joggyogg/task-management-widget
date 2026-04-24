@@ -97,7 +97,7 @@ namespace TaskManagementWidget.Views
                 DeadlineEnabledBox.IsChecked = true;  // fires DeadlineEnabledBox_Changed
                 var local = existing.Deadline.Value.ToLocalTime();
                 DeadlineCal.SelectedDate = local.Date;
-                DateInlineLabel.Text = "Date | " + local.Date.ToString("MM/dd/yyyy");
+                DateInlineLabel.Text = "Date | " + local.Date.ToString("dd/MM/yy");
                 int rh = local.Hour;
                 int rm = local.Minute >= 30 ? 30 : 0;
                 string timeStr = $"{rh:D2}:{rm:D2}";
@@ -128,7 +128,7 @@ namespace TaskManagementWidget.Views
         {
             if (DeadlineCal.SelectedDate.HasValue)
             {
-                DateInlineLabel.Text = "Date | " + DeadlineCal.SelectedDate.Value.ToString("MM/dd/yyyy");
+                DateInlineLabel.Text = "Date | " + DeadlineCal.SelectedDate.Value.ToString("dd/MM/yy");
                 DatePopup.IsOpen = false;
             }
         }

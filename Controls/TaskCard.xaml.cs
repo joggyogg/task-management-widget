@@ -163,6 +163,9 @@ namespace TaskManagementWidget.Controls
             {
                 AgeText.Visibility = Visibility.Visible;
                 var remaining = t.Deadline.Value - DateTime.UtcNow;
+                var localDue = t.Deadline.Value.ToLocalTime();
+                AgeText.ToolTip = null;
+
                 if (remaining.TotalSeconds <= 0)
                 {
                     AgeText.Text       = "OVERDUE";
@@ -194,6 +197,7 @@ namespace TaskManagementWidget.Controls
                 AgeText.Visibility = Visibility.Collapsed;
                 return;
             }
+            AgeText.ToolTip = null;
             var age     = DateTime.UtcNow - t.CreatedAt;
             int days    = (int)age.TotalDays;
             int hours   = age.Hours;
@@ -359,6 +363,17 @@ namespace TaskManagementWidget.Controls
             menu.PlacementTarget = StatusButton;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
             menu.IsOpen    = true;
+        }
+
+        private void AgeText_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (Task?.Deadline.HasValue == true)
+                AgeText.Text = Task.Deadline.Value.ToLocalTime().ToString("dd/MM/yy HH:mm");
+        }
+
+        private void AgeText_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (Task != null) RefreshAge(Task);
         }
 
         private void EditButton_Click(object sender, RoutedEventArgs e)

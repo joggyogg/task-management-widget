@@ -129,7 +129,10 @@
                         <TextBlock x:Name="AgeText"
                                    FontSize="10"
                                    VerticalAlignment="Center"
-                                   Margin="8,0,0,0"/>
+                                   Margin="8,0,0,0"
+                                   Cursor="Hand"
+                                   MouseEnter="AgeText_MouseEnter"
+                                   MouseLeave="AgeText_MouseLeave"/>
                     </StackPanel>
                 </Grid>
 
