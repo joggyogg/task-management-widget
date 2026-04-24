@@ -25,10 +25,14 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# Compiled MSIX output — only keep the distributable files, not the generated build folders
+# Compiled MSIX output — distributed via GitHub Releases, not git
 msix-output/publish-msix/
 msix-output/PackageLayout/
 msix-output/sign.pfx
+msix-output/TASKly.msix
+msix-output/TASKly.cer
+msix-output/Install.bat
+msix-output/Uninstall.bat
 
 # Log/scratch files created by build scripts
 *.log
