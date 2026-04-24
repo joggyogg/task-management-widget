@@ -1,38 +1,37 @@
 @echo off
-cd /d "%~dp0.."
+setlocal
+cd /d "%~dp0"
 
-echo Stopping running instance...
-taskkill /IM TaskManagementWidget.exe /F >nul 2>&1
-timeout /t 2 /nobreak >nul
-
-echo Building latest version...
-dotnet build TaskManagementWidget.csproj -c Release >nul 2>&1
+:: Self-elevate to admin
+net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo.
-    echo BUILD FAILED. Run this to see errors:
-    echo   dotnet build TaskManagementWidget.csproj -c Release
+    echo Requesting administrator privileges...
+    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
+echo Uninstalling previous version (if any)...
+powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name 'TASKly' | Remove-AppxPackage" >nul 2>&1
+
+echo Installing TASKly certificate...
+powershell -NoProfile -NonInteractive -Command "Import-Certificate -FilePath '%~dp0TASKly.cer' -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null"
+if %errorLevel% neq 0 (
+    echo ERROR: Failed to install certificate.
     pause
     exit /b 1
 )
 
-echo Deploying...
-set SRC=bin\Release\net8.0-windows\win-x64
-set DST=msix-output\publish-msix
-copy /Y "%SRC%\TaskManagementWidget.dll"                "%DST%\TaskManagementWidget.dll"                >nul
-copy /Y "%SRC%\TaskManagementWidget.pdb"                "%DST%\TaskManagementWidget.pdb"                >nul
-copy /Y "%SRC%\TaskManagementWidget.deps.json"          "%DST%\TaskManagementWidget.deps.json"          >nul
-copy /Y "%SRC%\TaskManagementWidget.runtimeconfig.json" "%DST%\TaskManagementWidget.runtimeconfig.json" >nul
-
-echo Setting up auto-start on sign-in...
-powershell -NoProfile -NonInteractive -Command ^
-  "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'" ^
-  " -Name 'TaskManagementWidget'" ^
-  " -Value '\"%~dp0publish-msix\TaskManagementWidget.exe\"'" ^
-  " -Type String -Force"
+echo Installing TASKly...
+powershell -NoProfile -NonInteractive -Command "Add-AppxPackage -Path '%~dp0TASKly.msix'"
+if %errorLevel% neq 0 (
+    echo ERROR: Installation failed. If the error mentions 'choose where to get apps',
+    echo go to Settings ^> Apps ^> Advanced app settings and set it to Anywhere.
+    pause
+    exit /b 1
+)
 
 echo.
-echo Launching...
-start "" "%~dp0publish-msix\TaskManagementWidget.exe"
-
-echo.
-echo Done! Task Management Widget is running and will auto-start on sign-in.
+echo TASKly installed successfully!
+echo Launching TASKly...
+powershell -NoProfile -NonInteractive -Command "& { $pkg = Get-AppxPackage -Name 'TASKly'; Start-Process ('shell:AppsFolder\' + $pkg.PackageFamilyName + '!App') }"
+pause

@@ -1,6 +1,8 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using TaskManagementWidget.Models;
 using TaskStatus = TaskManagementWidget.Models.TaskStatus;
 
@@ -8,6 +10,7 @@ namespace TaskManagementWidget.Views
 {
     public partial class AddTaskWindow : Window
     {
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
         public TaskItem?  Result        { get; private set; }
         public bool       DeletePressed { get; private set; }
 
@@ -18,6 +21,11 @@ namespace TaskManagementWidget.Views
         public AddTaskWindow()
         {
             InitializeComponent();
+            // Populate time dropdown (30-min intervals)
+            for (int h = 0; h < 24; h++)
+                for (int m = 0; m < 60; m += 30)
+                    DeadlineTimeCombo.Items.Add($"{h:D2}:{m:D2}");
+            DeadlineTimeCombo.SelectedIndex = 0;
             NameBox.Focus();
         }
 
@@ -46,6 +54,11 @@ namespace TaskManagementWidget.Views
 
             this.Left = Math.Max(waLeftDip, Math.Min(desiredLeft, waRightDip  - this.ActualWidth));
             this.Top  = Math.Max(waTopDip,  Math.Min(desiredTop,  waBotDip - this.ActualHeight));
+
+            // Force keyboard focus to this window
+            var hwnd = new WindowInteropHelper(this).Handle;
+            SetForegroundWindow(hwnd);
+            NameBox.Focus();
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
@@ -83,8 +96,14 @@ namespace TaskManagementWidget.Views
             {
                 DeadlineEnabledBox.IsChecked = true;  // fires DeadlineEnabledBox_Changed
                 var local = existing.Deadline.Value.ToLocalTime();
-                DeadlineDatePicker.SelectedDate = local.Date;
-                DeadlineTimeBox.Text            = local.ToString("HH:mm");
+                DeadlineCal.SelectedDate = local.Date;
+                DateInlineLabel.Text = "Date | " + local.Date.ToString("MM/dd/yyyy");
+                int rh = local.Hour;
+                int rm = local.Minute >= 30 ? 30 : 0;
+                string timeStr = $"{rh:D2}:{rm:D2}";
+                for (int i = 0; i < DeadlineTimeCombo.Items.Count; i++)
+                    if (DeadlineTimeCombo.Items[i].ToString() == timeStr)
+                    { DeadlineTimeCombo.SelectedIndex = i; break; }
             }
 
             SaveBtn.IsEnabled = true;
@@ -97,6 +116,63 @@ namespace TaskManagementWidget.Views
         private void DeadlineEnabledBox_Changed(object sender, RoutedEventArgs e)
             => DeadlinePanel.Visibility = DeadlineEnabledBox.IsChecked == true
                 ? Visibility.Visible : Visibility.Collapsed;
+
+        private void DatePickerBtn_Click(object sender, RoutedEventArgs e)
+        {
+            DatePopup.PlacementTarget = DatePickerBtn;
+            DatePopup.IsOpen = true;
+        }
+
+        private void DeadlineCal_SelectedDatesChanged(object sender,
+            System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (DeadlineCal.SelectedDate.HasValue)
+            {
+                DateInlineLabel.Text = "Date | " + DeadlineCal.SelectedDate.Value.ToString("MM/dd/yyyy");
+                DatePopup.IsOpen = false;
+            }
+        }
+
+        private void AutoScaleBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (DeadlineEnabledBox.IsChecked != true || !DeadlineCal.SelectedDate.HasValue)
+            {
+                MessageBox.Show("Please set a deadline first.", "Importance Scaling",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var      date  = DeadlineCal.SelectedDate.Value.Date;
+            TimeSpan time  = TimeSpan.Zero;
+            var      parts = (DeadlineTimeCombo.SelectedItem?.ToString() ?? "00:00").Split(':');
+            if (parts.Length == 2
+                && int.TryParse(parts[0], out int h) && h >= 0 && h < 24
+                && int.TryParse(parts[1], out int m) && m >= 0 && m < 60)
+                time = new TimeSpan(h, m, 0);
+
+            var    deadlineUtc    = DateTime.SpecifyKind(date + time, DateTimeKind.Local).ToUniversalTime();
+            double hoursAvailable = (deadlineUtc - DateTime.UtcNow).TotalHours - 24;
+            int    pointsNeeded   = 100 - (int)ImportanceSlider.Value;
+
+            if (hoursAvailable <= 0)
+            {
+                MessageBox.Show("The deadline is less than 24 hours away — auto-scale cannot be applied.", "Importance Scaling",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (pointsNeeded <= 0)
+            {
+                MessageBox.Show("Importance is already at 100.", "Importance Scaling",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            double tickerHours = hoursAvailable / pointsNeeded;
+            TickerPointsBox.Text = "1";
+            TickerHoursBox.Text  = Math.Round(tickerHours, 2)
+                .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
 
         private void NameBox_TextChanged(object sender,
             System.Windows.Controls.TextChangedEventArgs e)
@@ -129,11 +205,11 @@ namespace TaskManagementWidget.Views
 
             // ── Read optional deadline (local → UTC) ────────────────────────────────────
             DateTime? deadline = null;
-            if (DeadlineEnabledBox.IsChecked == true && DeadlineDatePicker.SelectedDate.HasValue)
+            if (DeadlineEnabledBox.IsChecked == true && DeadlineCal.SelectedDate.HasValue)
             {
-                var      date  = DeadlineDatePicker.SelectedDate.Value.Date;
+                var      date  = DeadlineCal.SelectedDate.Value.Date;
                 TimeSpan time  = TimeSpan.Zero;
-                var      parts = DeadlineTimeBox.Text.Trim().Split(':');
+                var      parts = (DeadlineTimeCombo.SelectedItem?.ToString() ?? "00:00").Split(':');
                 if (parts.Length == 2
                     && int.TryParse(parts[0], out int h) && h >= 0 && h < 24
                     && int.TryParse(parts[1], out int m) && m >= 0 && m < 60)

@@ -3,14 +3,18 @@ $projectDir  = "c:\Users\joggy\Documents\Task Management Widget\task-management-
 $publishDir  = "$projectDir\publish"
 $msixDir     = "$projectDir\msix-output"
 $pkgLayout   = "$msixDir\PackageLayout"
-$outputMsix  = "$msixDir\TaskManagementWidget.msix"
-$cerPath     = "$msixDir\TaskManagementWidget.cer"
+$outputMsix  = "$msixDir\TASKly.msix"
+$cerPath     = "$msixDir\TASKly.cer"
 $pfxPath     = "$msixDir\sign.pfx"
 $pfxPassword = "WidgetSign2026!"
 
 Set-Location $projectDir
 
 # ── 0. Publish (no single-file — MSIX sandbox blocks temp extraction) ─────────
+Write-Host "Cleaning previous build output..." -ForegroundColor Yellow
+dotnet clean TaskManagementWidget.csproj -c Release
+if ($LASTEXITCODE -ne 0) { throw "dotnet clean failed" }
+
 Write-Host "Publishing app for MSIX..." -ForegroundColor Yellow
 dotnet publish TaskManagementWidget.csproj -c Release -o "$msixDir\publish-msix" `
     -p:PublishSingleFile=false -p:SelfContained=true -p:RuntimeIdentifier=win-x64
@@ -41,6 +45,8 @@ $publisher = $cert.Subject   # must exactly match manifest Publisher
 
 # ── 2. Export .cer and .pfx ───────────────────────────────────────────────────
 New-Item -ItemType Directory $msixDir -Force | Out-Null
+Remove-Item "$msixDir\TaskManagementWidget.cer" -Force -ErrorAction SilentlyContinue
+Remove-Item "$msixDir\TaskManagementWidget.msix" -Force -ErrorAction SilentlyContinue
 Export-Certificate -Cert $cert -FilePath $cerPath -Type CERT | Out-Null
 $sec = ConvertTo-SecureString $pfxPassword -AsPlainText -Force
 Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $sec | Out-Null
@@ -58,30 +64,23 @@ Add-Type -AssemblyName System.Drawing
 function New-LogoPng([string]$path, [int]$width, [int]$height) {
     $bmp = New-Object System.Drawing.Bitmap($width, $height)
     $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.SmoothingMode        = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.TextRenderingHint    = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
 
     # Dark background
     $bg = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 30, 46))
     $g.FillRectangle($bg, 0, 0, $width, $height)
 
-    # Centred circle (based on shortest side)
-    $sz     = [Math]::Min($width, $height)
-    $margin = [int]($sz * 0.12)
-    $cSz    = $sz - $margin * 2
-    $cx     = [int](($width  - $cSz) / 2)
-    $cy     = [int](($height - $cSz) / 2)
-    $accent = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(137, 180, 250))
-    $g.FillEllipse($accent, $cx, $cy, $cSz, $cSz)
-
-    # Letter "T"
-    $fontSize = [float]($sz * 0.42)
-    $font     = New-Object System.Drawing.Font("Segoe UI", $fontSize, [System.Drawing.FontStyle]::Bold)
-    $fg       = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 30, 46))
+    # Heart emoji centred
+    $sz       = [Math]::Min($width, $height)
+    $fontSize = [float]($sz * 0.58)
+    $font     = New-Object System.Drawing.Font("Segoe UI Emoji", $fontSize, [System.Drawing.FontStyle]::Regular)
+    $fg       = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(243, 139, 168))
     $sf       = New-Object System.Drawing.StringFormat
     $sf.Alignment     = [System.Drawing.StringAlignment]::Center
     $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
     $rect = New-Object System.Drawing.RectangleF(0, 0, $width, $height)
-    $g.DrawString("T", $font, $fg, $rect, $sf)
+    $g.DrawString("`u{2764}", $font, $fg, $rect, $sf)
 
     $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     $g.Dispose(); $bmp.Dispose()
@@ -98,15 +97,16 @@ $manifest = @"
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-         IgnorableNamespaces="uap rescap">
-  <Identity Name="TaskManagementWidget"
+         IgnorableNamespaces="uap uap5 rescap">
+  <Identity Name="TASKly"
             Publisher="$publisher"
             Version="1.0.0.0"
             ProcessorArchitecture="x64" />
   <Properties>
-    <DisplayName>Task Management Widget</DisplayName>
-    <PublisherDisplayName>TaskWidget</PublisherDisplayName>
+    <DisplayName>TASKly</DisplayName>
+    <PublisherDisplayName>TASKly</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Dependencies>
@@ -118,13 +118,19 @@ $manifest = @"
   <Applications>
     <Application Id="App" Executable="TaskManagementWidget.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="Task Management Widget"
-        Description="A desktop task management widget"
+        DisplayName="TASKly"
+        Description="TASKly - desktop task management widget"
         BackgroundColor="#1e1e2e"
         Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png">
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        AppListEntry="default">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
       </uap:VisualElements>
+      <Extensions>
+        <uap5:Extension Category="windows.startupTask">
+          <uap5:StartupTask TaskId="TASKlyStartup" Enabled="true" DisplayName="TASKly"/>
+        </uap5:Extension>
+      </Extensions>
     </Application>
   </Applications>
   <Capabilities>
@@ -184,26 +190,86 @@ if ($LASTEXITCODE -ne 0) { throw "signtool sign failed (exit $LASTEXITCODE)" }
 # ── Done ──────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
-Write-Host "  MSIX package ready!" -ForegroundColor Green
+Write-Host "  TASKly package ready!" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Send your wife BOTH of these files:" -ForegroundColor Yellow
 Write-Host "  1. $cerPath" -ForegroundColor Cyan
 Write-Host "  2. $outputMsix" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "INSTALL STEPS (she does this once):" -ForegroundColor Yellow
+Write-Host "To install: right-click Install.bat -> Run as administrator" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  Step 1 - Install the certificate:" -ForegroundColor White
-Write-Host "    Double-click  TaskManagementWidget.cer"
-Write-Host "    -> Open  ->  Install Certificate"
-Write-Host "    -> Local Machine  ->  Next"
-Write-Host "    -> 'Place all certificates in the following store'  ->  Browse"
-Write-Host "    -> Select 'Trusted People'  ->  OK  ->  Next  ->  Finish"
-Write-Host ""
-Write-Host "  Step 2 - Install the app:" -ForegroundColor White
-Write-Host "    Double-click  TaskManagementWidget.msix  ->  Install"
-Write-Host ""
-Write-Host "  If the Install button is greyed out:" -ForegroundColor DarkYellow
-Write-Host "    Settings -> Apps -> Advanced app settings"
-Write-Host "    -> 'Choose where to get apps'  -> set to Anywhere"
-Write-Host ""
+
+# ── 9. Generate Install.bat ───────────────────────────────────────────────────
+$installBat = @'
+@echo off
+setlocal
+cd /d "%~dp0"
+
+:: Self-elevate to admin
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo Requesting administrator privileges...
+    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
+echo Uninstalling previous version (if any)...
+powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name 'TASKly' | Remove-AppxPackage" >nul 2>&1
+
+echo Installing TASKly certificate...
+powershell -NoProfile -NonInteractive -Command "Import-Certificate -FilePath '%~dp0TASKly.cer' -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null"
+if %errorLevel% neq 0 (
+    echo ERROR: Failed to install certificate.
+    pause
+    exit /b 1
+)
+
+echo Installing TASKly...
+powershell -NoProfile -NonInteractive -Command "Add-AppxPackage -Path '%~dp0TASKly.msix'"
+if %errorLevel% neq 0 (
+    echo ERROR: Installation failed. If the error mentions 'choose where to get apps',
+    echo go to Settings ^> Apps ^> Advanced app settings and set it to Anywhere.
+    pause
+    exit /b 1
+)
+
+echo.
+echo TASKly installed successfully!
+echo Launching TASKly...
+powershell -NoProfile -NonInteractive -Command "& { $pkg = Get-AppxPackage -Name 'TASKly'; Start-Process ('shell:AppsFolder\' + $pkg.PackageFamilyName + '!App') }"
+pause
+'@
+Set-Content "$msixDir\Install.bat" -Value $installBat -Encoding ASCII
+
+# ── 10. Generate Uninstall.bat ────────────────────────────────────────────────
+$uninstallBat = @'
+@echo off
+setlocal
+
+:: Self-elevate to admin
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo Requesting administrator privileges...
+    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
+echo Stopping TASKly...
+taskkill /IM TaskManagementWidget.exe /F >nul 2>&1
+
+echo Uninstalling TASKly...
+powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name 'TASKly' | Remove-AppxPackage"
+
+echo Removing certificate...
+powershell -NoProfile -NonInteractive -Command "Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object { $_.Subject -eq 'CN=TaskWidget' } | Remove-Item"
+
+echo Removing auto-start entry...
+powershell -NoProfile -NonInteractive -Command "Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'TaskManagementWidget' -ErrorAction SilentlyContinue"
+
+echo.
+echo TASKly uninstalled.
+pause
+'@
+Set-Content "$msixDir\Uninstall.bat" -Value $uninstallBat -Encoding ASCII
+Write-Host "Generated Install.bat and Uninstall.bat" -ForegroundColor Green

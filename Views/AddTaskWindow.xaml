@@ -170,6 +170,90 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="DarkComboBox" TargetType="ComboBox">
+            <Setter Property="Background"   Value="Transparent"/>
+            <Setter Property="Foreground"   Value="#CCFFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding"      Value="8,5"/>
+            <Setter Property="MaxDropDownHeight" Value="200"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}" CornerRadius="0">
+                                <Grid Margin="{TemplateBinding Padding}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="16"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter Grid.Column="0"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      VerticalAlignment="Center"
+                                                      IsHitTestVisible="False"/>
+                                    <Path Grid.Column="1"
+                                          Data="M 0 0 L 4 4 L 8 0 Z"
+                                          Fill="#80FFFFFF"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                            <ToggleButton Focusable="false"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Placement="Bottom"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="#313244"
+                                        BorderBrush="#50FFFFFF"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer>
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Foreground" Value="#CCFFFFFF"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Padding"    Value="8,5"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border Background="{TemplateBinding Background}"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#1AFFFFFF"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="#2A89B4FA"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Border CornerRadius="20"
@@ -235,7 +319,7 @@
             <TextBox x:Name="DescriptionBox"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto"
+                     VerticalScrollBarVisibility="Hidden"
                      VerticalAlignment="Top"/>
         </Border>
 
@@ -245,13 +329,81 @@
             <TextBox x:Name="UrlBox"/>
         </Border>
 
-        <!-- Auto-increase importance -->
+        <!-- Deadline -->
         <Grid Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="AUTO-INCREASE IMPORTANCE"
+            <TextBlock Grid.Column="0" Text="DEADLINE"
+                       Foreground="#80FFFFFF" FontSize="11" FontWeight="SemiBold"
+                       VerticalAlignment="Center"/>
+            <CheckBox x:Name="DeadlineEnabledBox" Grid.Column="1"
+                      Style="{StaticResource ToggleCheck}"
+                      Checked="DeadlineEnabledBox_Changed"
+                      Unchecked="DeadlineEnabledBox_Changed"/>
+        </Grid>
+
+        <StackPanel x:Name="DeadlinePanel" Visibility="Collapsed" Margin="0,8,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="90"/>
+                </Grid.ColumnDefinitions>
+                <!-- Date: inline label + calendar button -->
+                <Grid Grid.Column="0" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="DateInlineLabel"
+                               Grid.Column="0"
+                               Text="Date"
+                               Foreground="#80FFFFFF"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <Button x:Name="DatePickerBtn"
+                            Grid.Column="1"
+                            Content="📅"
+                            Style="{StaticResource GhostButton}"
+                            Padding="6,4"
+                            Click="DatePickerBtn_Click"/>
+                </Grid>
+                <!-- Hour dropdown -->
+                <StackPanel Grid.Column="2">
+                    <Label Content="Hour"/>
+                    <Border Background="#1AFFFFFF" CornerRadius="8">
+                        <ComboBox x:Name="DeadlineTimeCombo"
+                                  Style="{StaticResource DarkComboBox}"/>
+                    </Border>
+                </StackPanel>
+            </Grid>
+            <!-- Calendar popup -->
+            <Popup x:Name="DatePopup"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True">
+                <Border Background="#313244"
+                        BorderBrush="#50FFFFFF"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="4">
+                    <Calendar x:Name="DeadlineCal"
+                              SelectionMode="SingleDate"
+                              SelectedDatesChanged="DeadlineCal_SelectedDatesChanged"/>
+                </Border>
+            </Popup>
+        </StackPanel>
+
+        <!-- Importance Scaling -->
+        <Grid Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="IMPORTANCE SCALING"
                        Foreground="#80FFFFFF" FontSize="11" FontWeight="SemiBold"
                        VerticalAlignment="Center"/>
             <CheckBox x:Name="TickerEnabledBox" Grid.Column="1"
@@ -280,57 +432,14 @@
                     </Border>
                 </StackPanel>
             </Grid>
-        </StackPanel>
-
-        <!-- Deadline -->
-        <Grid Margin="0,16,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="DEADLINE"
-                       Foreground="#80FFFFFF" FontSize="11" FontWeight="SemiBold"
-                       VerticalAlignment="Center"/>
-            <CheckBox x:Name="DeadlineEnabledBox" Grid.Column="1"
-                      Style="{StaticResource ToggleCheck}"
-                      Checked="DeadlineEnabledBox_Changed"
-                      Unchecked="DeadlineEnabledBox_Changed"/>
-        </Grid>
-
-        <StackPanel x:Name="DeadlinePanel" Visibility="Collapsed" Margin="0,8,0,0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="8"/>
-                    <ColumnDefinition Width="90"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <Label Content="Date"/>
-                    <Border Background="#1AFFFFFF" CornerRadius="8" Padding="4,0">
-                        <DatePicker x:Name="DeadlineDatePicker"
-                                    Background="Transparent"
-                                    Foreground="#CCFFFFFF"
-                                    BorderThickness="0"
-                                    SelectedDateFormat="Short">
-                            <DatePicker.Resources>
-                                <Style TargetType="DatePickerTextBox">
-                                    <Setter Property="Background" Value="Transparent"/>
-                                    <Setter Property="Foreground" Value="#CCFFFFFF"/>
-                                    <Setter Property="BorderThickness" Value="0"/>
-                                    <Setter Property="Padding" Value="4,6"/>
-                                    <Setter Property="CaretBrush" Value="#CDD6F4"/>
-                                </Style>
-                            </DatePicker.Resources>
-                        </DatePicker>
-                    </Border>
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <Label Content="Time (HH:MM)"/>
-                    <Border Background="#1AFFFFFF" CornerRadius="8">
-                        <TextBox x:Name="DeadlineTimeBox" Text="00:00"/>
-                    </Border>
-                </StackPanel>
-            </Grid>
+            <Button x:Name="AutoScaleBtn"
+                    Content="Auto from deadline"
+                    Style="{StaticResource GhostButton}"
+                    Padding="0,5"
+                    Margin="0,8,0,0"
+                    Foreground="#89B4FA"
+                    HorizontalAlignment="Left"
+                    Click="AutoScaleBtn_Click"/>
         </StackPanel>
 
         <!-- Buttons -->

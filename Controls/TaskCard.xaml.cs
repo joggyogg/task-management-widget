@@ -130,10 +130,10 @@ namespace TaskManagementWidget.Controls
                 {
                     int dDays = (int)remaining.TotalDays;
                     AgeText.Text = dDays > 0
-                        ? $"{dDays}d {remaining.Hours}h"
+                        ? $"Due: {dDays}d {remaining.Hours}h"
                         : remaining.TotalHours >= 1
-                            ? $"{(int)remaining.TotalHours}h {remaining.Minutes}m"
-                            : $"{remaining.Minutes}m";
+                            ? $"Due: {(int)remaining.TotalHours}h {remaining.Minutes}m"
+                            : $"Due: {remaining.Minutes}m";
 
                     AgeText.Foreground = remaining.TotalDays switch
                     {
@@ -156,7 +156,7 @@ namespace TaskManagementWidget.Controls
             int days    = (int)age.TotalDays;
             int hours   = age.Hours;
             int minutes = age.Minutes;
-            AgeText.Text       = $"{days:D2}:{hours:D2}:{minutes:D2}";
+            AgeText.Text       = $"Age: {days:D2}:{hours:D2}:{minutes:D2}";
             AgeText.Visibility = Visibility.Visible;
             AgeText.Foreground = days switch
             {

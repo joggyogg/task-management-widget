@@ -45,6 +45,7 @@ namespace TaskManagementWidget
         [DllImport("user32.dll")] private static extern uint  GetDpiForWindow(IntPtr hWnd);
         [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
         [DllImport("user32.dll")] private static extern bool  GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+        [DllImport("user32.dll")] private static extern bool  SetForegroundWindow(IntPtr hWnd);
 
         // ── Acrylic blur ─────────────────────────────────────────────────────────
         [StructLayout(LayoutKind.Sequential)]
@@ -166,7 +167,11 @@ namespace TaskManagementWidget
         private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             var hwnd = new WindowInteropHelper(this).Handle;
-            SetWindowPos(hwnd, HWND_BOTTOM, _anchorX, _anchorY, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+            // Keep the RIGHT edge pinned as window grows/shrinks leftward
+            int paddingPx      = (int)(PADDING_PX * _scale);
+            int currentWidthPx = (int)(e.NewSize.Width * _scale);
+            int dynamicAnchorX = _mi.rcWork.Right - currentWidthPx - paddingPx;
+            SetWindowPos(hwnd, HWND_BOTTOM, dynamicAnchorX, _anchorY, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
             ApplyWindowRgn(hwnd);
         }
 
@@ -232,9 +237,7 @@ namespace TaskManagementWidget
 
         private void AddTaskBtn_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new AddTaskWindow { Owner = this };
-            if (dlg.ShowDialog() == true && dlg.Result != null)
-                _vm.AddTask(dlg.Result);
+            OpenTaskForm(null);
         }
 
         private void Card_StatusSetRequested(object sender, (TaskItem task, TaskManagementWidget.Models.TaskStatus status) e)
@@ -242,14 +245,248 @@ namespace TaskManagementWidget
 
         private void Card_EditRequested(object sender, TaskItem task)
         {
-            var dlg = new AddTaskWindow(task) { Owner = this };
-            if (dlg.ShowDialog() == true)
+            OpenTaskForm(task);
+        }
+
+        // ── Inline task form ─────────────────────────────────────────────────────
+        private TaskItem? _editingTask;
+
+        private void OpenTaskForm(TaskItem? existing)
+        {
+            _editingTask = existing;
+
+            // Populate hour dropdown 00:00 – 23:00
+            if (FormDeadlineHourBox.Items.Count == 0)
             {
-                if (dlg.DeletePressed)
-                    _vm.DeleteTask(task);
-                else
-                    _vm.Save(); // edits applied in-place by AddTaskWindow
+                for (int h = 0; h < 24; h++)
+                    FormDeadlineHourBox.Items.Add($"{h:D2}:00");
             }
+
+            if (existing == null)
+            {
+                FormTitleText.Text       = "New Task";
+                FormSaveBtn.Content      = "Add Task";
+                FormDeleteBtn.Visibility = Visibility.Collapsed;
+                FormNameBox.Text         = string.Empty;
+                FormImportanceSlider.Value = 50;
+                FormDescriptionBox.Text  = string.Empty;
+                FormUrlBox.Text          = string.Empty;
+                FormTickerEnabledBox.IsChecked  = false;
+                FormDeadlineEnabledBox.IsChecked = false;
+                FormTickerPointsBox.Text = "1";
+                FormTickerHoursBox.Text  = "1";
+                FormDeadlineCal.SelectedDate = null;
+                FormDateInlineLabel.Text = "Date";
+                FormDeadlineHourBox.SelectedIndex = 0;
+                FormSaveBtn.IsEnabled    = false;
+            }
+            else
+            {
+                FormTitleText.Text       = "Edit Task";
+                FormSaveBtn.Content      = "Save Changes";
+                FormDeleteBtn.Visibility = Visibility.Visible;
+                FormNameBox.Text         = existing.Name;
+                FormImportanceSlider.Value = existing.Importance;
+                FormDescriptionBox.Text  = existing.Description ?? string.Empty;
+                FormUrlBox.Text          = existing.Url ?? string.Empty;
+
+                if (existing.TickerPoints.HasValue)
+                {
+                    FormTickerEnabledBox.IsChecked = true;
+                    FormTickerPointsBox.Text = existing.TickerPoints.Value.ToString();
+                    FormTickerHoursBox.Text  = (existing.TickerHours ?? 1).ToString(
+                        System.Globalization.CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    FormTickerEnabledBox.IsChecked = false;
+                }
+
+                if (existing.Deadline.HasValue)
+                {
+                    FormDeadlineEnabledBox.IsChecked = true;
+                    var local = existing.Deadline.Value.ToLocalTime();
+                    FormDeadlineCal.SelectedDate = local.Date;
+                    FormDateInlineLabel.Text = "Date | " + local.Date.ToString("MM/dd/yyyy");
+                    FormDeadlineHourBox.SelectedIndex   = local.Hour;
+                }
+                else
+                {
+                    FormDeadlineEnabledBox.IsChecked = false;
+                }
+
+                FormSaveBtn.IsEnabled = true;
+            }
+
+            TaskFormPanel.Visibility = Visibility.Visible;
+            AddTaskTabBtn.Visibility  = Visibility.Collapsed;
+
+            // Allow keyboard input while form is open
+            var hwnd = new WindowInteropHelper(this).Handle;
+            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_NOACTIVATE);
+            SetForegroundWindow(hwnd);
+            FormNameBox.Focus();
+        }
+
+        private void CloseTaskForm()
+        {
+            TaskFormPanel.Visibility  = Visibility.Collapsed;
+            AddTaskTabBtn.Visibility  = Visibility.Visible;
+            _editingTask              = null;
+
+            // Restore no-activate so widget doesn't steal focus
+            var hwnd = new WindowInteropHelper(this).Handle;
+            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE);
+        }
+
+        private void TaskFormPopup_Opened(object sender, EventArgs e)
+        {
+            FormNameBox.Focus();
+        }
+
+        private void FormCancelBtn_Click(object sender, RoutedEventArgs e)
+            => CloseTaskForm();
+
+        private void FormNameBox_TextChanged(object sender,
+            System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (FormSaveBtn != null)
+                FormSaveBtn.IsEnabled = !string.IsNullOrWhiteSpace(FormNameBox.Text);
+        }
+
+        private void FormImportanceSlider_ValueChanged(object sender,
+            RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (FormImportanceLabel != null)
+                FormImportanceLabel.Text = ((int)FormImportanceSlider.Value).ToString();
+        }
+
+        private void FormDeadlineEnabledBox_Changed(object sender, RoutedEventArgs e)
+            => FormDeadlinePanel.Visibility = FormDeadlineEnabledBox.IsChecked == true
+                ? Visibility.Visible : Visibility.Collapsed;
+
+        private void FormDatePickerBtn_Click(object sender, RoutedEventArgs e)
+        {
+            FormDatePopup.PlacementTarget = FormDatePickerBtn;
+            FormDatePopup.IsOpen = true;
+        }
+
+        private void FormDeadlineCal_SelectedDatesChanged(object sender,
+            System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (FormDeadlineCal.SelectedDate.HasValue)
+            {
+                FormDateInlineLabel.Text = "Date | " + FormDeadlineCal.SelectedDate.Value.ToString("MM/dd/yyyy");
+                FormDatePopup.IsOpen = false;
+            }
+        }
+
+        private void FormTickerEnabledBox_Changed(object sender, RoutedEventArgs e)
+            => FormTickerPanel.Visibility = FormTickerEnabledBox.IsChecked == true
+                ? Visibility.Visible : Visibility.Collapsed;
+
+        private void FormAutoScaleBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (FormDeadlineEnabledBox.IsChecked != true || !FormDeadlineCal.SelectedDate.HasValue)
+            {
+                MessageBox.Show("Please set a deadline first.", "Importance Scaling",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            int hourIndex  = FormDeadlineHourBox.SelectedIndex < 0 ? 0 : FormDeadlineHourBox.SelectedIndex;
+            var date       = FormDeadlineCal.SelectedDate.Value.Date;
+            var deadlineUtc = DateTime.SpecifyKind(date.AddHours(hourIndex), DateTimeKind.Local).ToUniversalTime();
+            double hoursAvailable = (deadlineUtc - DateTime.UtcNow).TotalHours - 24;
+            int    pointsNeeded   = 100 - (int)FormImportanceSlider.Value;
+
+            if (hoursAvailable <= 0)
+            {
+                MessageBox.Show("The deadline is less than 24 hours away — auto-scale cannot be applied.",
+                    "Importance Scaling", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (pointsNeeded <= 0)
+            {
+                MessageBox.Show("Importance is already at 100.", "Importance Scaling",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            FormTickerPointsBox.Text = "1";
+            FormTickerHoursBox.Text  = Math.Round(hoursAvailable / pointsNeeded, 2)
+                .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private void FormSaveBtn_Click(object sender, RoutedEventArgs e)
+        {
+            int?    tickerPts = null;
+            double? tickerHrs = null;
+            if (FormTickerEnabledBox.IsChecked == true)
+            {
+                if (int.TryParse(FormTickerPointsBox.Text.Trim(), out int pts) && pts > 0)
+                    tickerPts = pts;
+                if (double.TryParse(FormTickerHoursBox.Text.Trim(),
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture, out double hrs) && hrs > 0)
+                    tickerHrs = hrs;
+            }
+
+            DateTime? deadline = null;
+            if (FormDeadlineEnabledBox.IsChecked == true && FormDeadlineCal.SelectedDate.HasValue)
+            {
+                int hourIndex = FormDeadlineHourBox.SelectedIndex < 0 ? 0 : FormDeadlineHourBox.SelectedIndex;
+                var date      = FormDeadlineCal.SelectedDate.Value.Date;
+                deadline = DateTime.SpecifyKind(date.AddHours(hourIndex), DateTimeKind.Local).ToUniversalTime();
+            }
+
+            if (_editingTask != null)
+            {
+                bool hadTicker            = _editingTask.TickerPoints.HasValue;
+                _editingTask.Name         = FormNameBox.Text.Trim();
+                _editingTask.Importance   = (int)FormImportanceSlider.Value;
+                _editingTask.Description  = string.IsNullOrWhiteSpace(FormDescriptionBox.Text)
+                                                ? null : FormDescriptionBox.Text.Trim();
+                _editingTask.Url          = string.IsNullOrWhiteSpace(FormUrlBox.Text)
+                                                ? null : FormUrlBox.Text.Trim();
+                _editingTask.TickerPoints = tickerPts;
+                _editingTask.TickerHours  = tickerHrs;
+                _editingTask.Deadline     = deadline;
+                if (tickerPts.HasValue && !hadTicker)
+                    _editingTask.TickerLastApplied = DateTime.UtcNow;
+                else if (!tickerPts.HasValue)
+                    _editingTask.TickerLastApplied = null;
+                _vm.Save();
+            }
+            else
+            {
+                var task = new TaskItem
+                {
+                    Name              = FormNameBox.Text.Trim(),
+                    Importance        = (int)FormImportanceSlider.Value,
+                    Description       = string.IsNullOrWhiteSpace(FormDescriptionBox.Text)
+                                            ? null : FormDescriptionBox.Text.Trim(),
+                    Url               = string.IsNullOrWhiteSpace(FormUrlBox.Text)
+                                            ? null : FormUrlBox.Text.Trim(),
+                    Status            = TaskStatus.ToDo,
+                    TickerPoints      = tickerPts,
+                    TickerHours       = tickerHrs,
+                    TickerLastApplied = tickerPts.HasValue ? DateTime.UtcNow : (DateTime?)null,
+                    Deadline          = deadline
+                };
+                _vm.AddTask(task);
+            }
+
+            CloseTaskForm();
+        }
+
+        private void FormDeleteBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (_editingTask != null)
+                _vm.DeleteTask(_editingTask);
+            CloseTaskForm();
         }
 
         // ── Per-card drag handlers (reliable: fires when cursor is over the card) ────
