@@ -251,6 +251,7 @@ namespace TaskManagementWidget
         // ── Inline task form ─────────────────────────────────────────────────────
         private TaskItem? _editingTask;
         private TaskItem? _previewTask;   // ghost task for add mode
+        private bool      _populatingForm; // true while OpenTaskForm is setting fields — suppresses UpdatePreview
 
         // Snapshot of original values captured when edit mode begins (for Cancel)
         private record TaskSnapshot(
@@ -261,6 +262,9 @@ namespace TaskManagementWidget
 
         private void OpenTaskForm(TaskItem? existing)
         {
+            _populatingForm = true;
+            try
+            {
             _editingTask = existing;
 
             // Populate hour dropdown 00:00 – 23:00
@@ -340,6 +344,12 @@ namespace TaskManagementWidget
             TaskFormPanel.Visibility = Visibility.Visible;
             AddTaskTabBtn.Visibility  = Visibility.Collapsed;
 
+            } // end _populatingForm block
+            finally { _populatingForm = false; }
+
+            // Sync preview to the now-stable form state
+            UpdatePreview();
+
             // Allow keyboard input while form is open
             var hwnd = new WindowInteropHelper(this).Handle;
             int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
@@ -401,6 +411,7 @@ namespace TaskManagementWidget
         // ── UpdatePreview: push all form values to the active preview/edit task ──
         private void UpdatePreview()
         {
+            if (_populatingForm) return;
             var target = _editingTask ?? _previewTask;
             if (target == null) return;
 
