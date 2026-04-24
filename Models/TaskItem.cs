@@ -111,6 +111,16 @@ namespace TaskManagementWidget.Models
             set { _deadline = value; OnPropertyChanged(); }
         }
 
+        private bool _isPreview;
+        /// <summary>True while the task is a live-preview ghost (not yet committed / being edited).
+        /// Never persisted to disk.</summary>
+        [JsonIgnore]
+        public bool IsPreview
+        {
+            get => _isPreview;
+            set { _isPreview = value; OnPropertyChanged(); }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected void OnPropertyChanged([CallerMemberName] string? name = null)

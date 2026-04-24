@@ -180,7 +180,9 @@ namespace TaskManagementWidget.ViewModels
             if (_suppressNotifications) return;
             if (e.PropertyName == nameof(TaskItem.BadgeT)) return;
             RefreshViews();
-            Save();
+            // Don't save to disk while a preview/edit is active — only commit on explicit Save
+            if (sender is TaskItem t && !t.IsPreview)
+                Save();
         }
 
         private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => Save();
@@ -261,6 +263,88 @@ namespace TaskManagementWidget.ViewModels
                     "Save Error",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Warning);
+        }
+
+        // ── Live preview management ───────────────────────────────────────────────
+
+        /// <summary>Add a ghost task to the Todo list for add-mode live preview.
+        /// Switches TodoView sort to Importance so the card moves with the slider.</summary>
+        public void AddPreviewTask(TaskItem task)
+        {
+            task.IsPreview   = true;
+            task.Status      = Models.TaskStatus.ToDo;
+            task.CreatedAt   = DateTime.UtcNow;
+            task.ManualOrder = AllTasks.Count;
+            Subscribe(task);
+            AllTasks.Add(task);
+            SetPreviewSort(true);
+            RefreshViews();
+        }
+
+        /// <summary>Remove the ghost task on cancel (add mode).</summary>
+        public void RemovePreviewTask(TaskItem task)
+        {
+            Unsubscribe(task);
+            AllTasks.Remove(task);
+            SetPreviewSort(false);
+            RefreshViews();
+        }
+
+        /// <summary>Commit the ghost task: strip IsPreview, assign ManualOrder by importance,
+        /// restore sort, and save to disk.</summary>
+        public void CommitPreviewTask(TaskItem task)
+        {
+            task.IsPreview = false;
+            task.CreatedAt = DateTime.UtcNow;
+            AssignManualOrderByImportance(task);
+            SetPreviewSort(false);
+            RefreshViews();
+            Save();
+        }
+
+        /// <summary>Mark an existing task as preview (edit mode) and switch views to importance sort.</summary>
+        public void BeginEditPreview(TaskItem task)
+        {
+            task.IsPreview = true;
+            SetPreviewSort(true);
+            RefreshViews();
+        }
+
+        /// <summary>End edit preview. If save=false, caller has already restored snapshot values.
+        /// Assigns ManualOrder, restores sort, and optionally saves.</summary>
+        public void EndEditPreview(TaskItem task, bool save)
+        {
+            task.IsPreview = false;
+            AssignManualOrderByImportance(task);
+            SetPreviewSort(false);
+            RefreshViews();
+            if (save) Save();
+        }
+
+        private void SetPreviewSort(bool previewActive)
+        {
+            var sort = previewActive
+                ? new SortDescription(nameof(TaskItem.Importance), ListSortDirection.Descending)
+                : new SortDescription(nameof(TaskItem.ManualOrder), ListSortDirection.Ascending);
+
+            TodoView.SortDescriptions.Clear();
+            TodoView.SortDescriptions.Add(sort);
+            DoingView.SortDescriptions.Clear();
+            DoingView.SortDescriptions.Add(sort);
+        }
+
+        private void AssignManualOrderByImportance(TaskItem task)
+        {
+            var peers = AllTasks
+                .Where(t => t.Status == task.Status && !t.IsPreview && t != task)
+                .OrderByDescending(t => t.Importance)
+                .ToList();
+
+            int insertIdx = peers.FindIndex(t => t.Importance < task.Importance);
+            if (insertIdx < 0) insertIdx = peers.Count;
+            peers.Insert(insertIdx, task);
+            for (int i = 0; i < peers.Count; i++)
+                peers[i].ManualOrder = i;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

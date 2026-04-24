@@ -343,7 +343,7 @@
             </Border.Resources>
 
             <StackPanel TextElement.FontFamily="Segoe UI" TextElement.FontSize="13" TextElement.Foreground="#CDD6F4">
-                <Grid Margin="16,14,12,0">
+                <Grid Margin="8,14,8,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
@@ -351,8 +351,8 @@
                     <TextBlock x:Name="FormTitleText" Grid.Column="0" Text="New Task" Foreground="#80FFFFFF" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <Button Grid.Column="1" Content="&#x2715;" Style="{StaticResource FormGhostButton}" Padding="8,4" Click="FormCancelBtn_Click"/>
                 </Grid>
-                <Rectangle Height="1" Fill="#30FFFFFF" Margin="16,10,16,0"/>
-                <StackPanel Margin="16,12,16,16">
+                <Rectangle Height="1" Fill="#30FFFFFF" Margin="8,10,8,0"/>
+                <StackPanel Margin="8,12,8,12">
                     <Label Content="Task name *"/>
                     <Border Background="#1AFFFFFF" CornerRadius="8">
                         <TextBox x:Name="FormNameBox" TextChanged="FormNameBox_TextChanged"/>
@@ -368,11 +368,11 @@
                     </Grid>
                     <Label Content="Description (optional)" Margin="0,12,0,0"/>
                     <Border Background="#1AFFFFFF" CornerRadius="8" Height="80">
-                        <TextBox x:Name="FormDescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Hidden" VerticalAlignment="Top"/>
+                        <TextBox x:Name="FormDescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Hidden" VerticalAlignment="Top" TextChanged="FormPreview_Changed"/>
                     </Border>
                     <Label Content="URL (optional)" Margin="0,12,0,0"/>
                     <Border Background="#1AFFFFFF" CornerRadius="8" Height="34">
-                        <TextBox x:Name="FormUrlBox" VerticalAlignment="Center"/>
+                        <TextBox x:Name="FormUrlBox" VerticalAlignment="Center" TextChanged="FormPreview_Changed"/>
                     </Border>
                     <Grid Margin="0,16,0,0">
                         <Grid.ColumnDefinitions>
@@ -411,7 +411,7 @@
                             </Grid>
                             <StackPanel Grid.Column="2">
                                 <Label Content="Hour"/>
-                                <ComboBox x:Name="FormDeadlineHourBox"/>
+                                <ComboBox x:Name="FormDeadlineHourBox" SelectionChanged="FormPreview_Changed"/>
                             </StackPanel>
                         </Grid>
                         <!-- Calendar popup -->

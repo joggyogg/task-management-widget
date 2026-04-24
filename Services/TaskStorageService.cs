@@ -38,7 +38,7 @@ namespace TaskManagementWidget.Services
             {
                 var dir = Path.GetDirectoryName(FilePath)!;
                 Directory.CreateDirectory(dir);
-                var json = JsonSerializer.Serialize(tasks, JsonOptions);
+                var json = JsonSerializer.Serialize(tasks.Where(t => !t.IsPreview), JsonOptions);
                 File.WriteAllText(FilePath, json);
                 LastSaveError = null;
             }

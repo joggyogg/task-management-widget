@@ -50,6 +50,35 @@ namespace TaskManagementWidget.Controls
         private const double DragThreshold = 6;
         private readonly DispatcherTimer _ageTimer;
 
+        // Yellow/black 45° hazard stripe used on the badge when a Doing task is lower priority.
+        // Tile geometry: one full stripe period (S=18px).
+        //   Shape 1 — top-left triangle:      x+y ∈ [0, S/2]
+        //   Shape 2 — bottom/right quad wrap:  x+y ∈ [S, 3S/2]  (same stripe, tiled around the corner)
+        // Together these produce continuous equal-width diagonal stripes across any surface.
+        private static readonly DrawingBrush _warningStripeBrush = CreateWarningStripeBrush();
+        private static DrawingBrush CreateWarningStripeBrush()
+        {
+            const double S = 18;   // tile size = one full stripe period (H = S/2 = 9)
+            var group = new DrawingGroup();
+            // Yellow background
+            group.Children.Add(new GeometryDrawing(
+                new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00)), null,
+                new RectangleGeometry(new Rect(0, 0, S, S))));
+            // Black stripe: top-left triangle + quadrilateral wrapping the opposite corner
+            group.Children.Add(new GeometryDrawing(
+                new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x00)), null,
+                Geometry.Parse("M 0,0 L 9,0 L 0,9 Z  M 0,18 L 18,0 L 18,9 L 9,18 Z")));
+            return new DrawingBrush
+            {
+                Drawing       = group,
+                TileMode      = TileMode.Tile,
+                Viewport      = new Rect(0, 0, S, S),
+                ViewportUnits = BrushMappingMode.Absolute,
+                Viewbox       = new Rect(0, 0, S, S),
+                ViewboxUnits  = BrushMappingMode.Absolute
+            };
+        }
+
         public TaskCard()
         {
             InitializeComponent();
@@ -78,9 +107,22 @@ namespace TaskManagementWidget.Controls
 
         private void Refresh(TaskItem t)
         {
-            NameText.Text          = t.Name;
-            ImportanceText.Text    = t.Importance.ToString();
-            BadgeBorder.Background = GetBadgeBrush(t.BadgeT);
+            NameText.Text       = t.Name;
+            ImportanceText.Text = t.Importance.ToString();
+
+            // ── Badge: hazard stripe when Doing task is lower priority than highest To-Do ──
+            bool isWarning = t.Status == TaskStatus.Doing && t.BadgeT > 0;
+            BadgeBorder.Background = isWarning ? _warningStripeBrush : GetBadgeBrush(t.BadgeT);
+            ImportanceText.Foreground = isWarning
+                ? new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x00))
+                : new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x2E));
+
+            // ── Preview highlight: card is being actively edited/created ────────
+            if (t.IsPreview)
+                CardBorder.SetValue(Border.BackgroundProperty,
+                    new SolidColorBrush(Color.FromArgb(0x38, 0xFF, 0xFF, 0xFF)));
+            else
+                CardBorder.ClearValue(Border.BackgroundProperty);
 
             bool hasDesc = !string.IsNullOrWhiteSpace(t.Description);
             ExpandButton.Visibility = hasDesc ? Visibility.Visible : Visibility.Collapsed;

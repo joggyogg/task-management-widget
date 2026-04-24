@@ -17,7 +17,7 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet clean failed" }
 
 Write-Host "Publishing app for MSIX..." -ForegroundColor Yellow
 dotnet publish TaskManagementWidget.csproj -c Release -o "$msixDir\publish-msix" `
-    -p:PublishSingleFile=false -p:SelfContained=true -p:RuntimeIdentifier=win-x64
+    -p:PublishSingleFile=false -p:SelfContained=true -p:RuntimeIdentifier=win-x64 --no-restore
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
 Write-Host "Publish complete" -ForegroundColor Green
 

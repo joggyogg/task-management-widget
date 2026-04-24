@@ -250,6 +250,14 @@ namespace TaskManagementWidget
 
         // ── Inline task form ─────────────────────────────────────────────────────
         private TaskItem? _editingTask;
+        private TaskItem? _previewTask;   // ghost task for add mode
+
+        // Snapshot of original values captured when edit mode begins (for Cancel)
+        private record TaskSnapshot(
+            string Name, int Importance, string? Description, string? Url,
+            int? TickerPoints, double? TickerHours, DateTime? TickerLastApplied,
+            DateTime? Deadline, int ManualOrder);
+        private TaskSnapshot? _editSnapshot;
 
         private void OpenTaskForm(TaskItem? existing)
         {
@@ -264,6 +272,7 @@ namespace TaskManagementWidget
 
             if (existing == null)
             {
+                // ── Add mode: create a ghost preview task ────────────────────────
                 FormTitleText.Text       = "New Task";
                 FormSaveBtn.Content      = "Add Task";
                 FormDeleteBtn.Visibility = Visibility.Collapsed;
@@ -271,7 +280,7 @@ namespace TaskManagementWidget
                 FormImportanceSlider.Value = 50;
                 FormDescriptionBox.Text  = string.Empty;
                 FormUrlBox.Text          = string.Empty;
-                FormTickerEnabledBox.IsChecked  = false;
+                FormTickerEnabledBox.IsChecked   = false;
                 FormDeadlineEnabledBox.IsChecked = false;
                 FormTickerPointsBox.Text = "1";
                 FormTickerHoursBox.Text  = "1";
@@ -279,9 +288,18 @@ namespace TaskManagementWidget
                 FormDateInlineLabel.Text = "Date";
                 FormDeadlineHourBox.SelectedIndex = 0;
                 FormSaveBtn.IsEnabled    = false;
+
+                _previewTask = new TaskItem { Importance = 50 };
+                _vm.AddPreviewTask(_previewTask);
             }
             else
             {
+                // ── Edit mode: snapshot and mark task as preview ─────────────────
+                _editSnapshot = new TaskSnapshot(
+                    existing.Name, existing.Importance, existing.Description, existing.Url,
+                    existing.TickerPoints, existing.TickerHours, existing.TickerLastApplied,
+                    existing.Deadline, existing.ManualOrder);
+
                 FormTitleText.Text       = "Edit Task";
                 FormSaveBtn.Content      = "Save Changes";
                 FormDeleteBtn.Visibility = Visibility.Visible;
@@ -308,7 +326,7 @@ namespace TaskManagementWidget
                     var local = existing.Deadline.Value.ToLocalTime();
                     FormDeadlineCal.SelectedDate = local.Date;
                     FormDateInlineLabel.Text = "Date | " + local.Date.ToString("MM/dd/yyyy");
-                    FormDeadlineHourBox.SelectedIndex   = local.Hour;
+                    FormDeadlineHourBox.SelectedIndex = local.Hour;
                 }
                 else
                 {
@@ -316,6 +334,7 @@ namespace TaskManagementWidget
                 }
 
                 FormSaveBtn.IsEnabled = true;
+                _vm.BeginEditPreview(existing);
             }
 
             TaskFormPanel.Visibility = Visibility.Visible;
@@ -329,11 +348,41 @@ namespace TaskManagementWidget
             FormNameBox.Focus();
         }
 
-        private void CloseTaskForm()
+        private void CloseTaskForm(bool save = false)
         {
-            TaskFormPanel.Visibility  = Visibility.Collapsed;
-            AddTaskTabBtn.Visibility  = Visibility.Visible;
-            _editingTask              = null;
+            if (_editingTask == null && _previewTask != null)
+            {
+                // ── Add mode ─────────────────────────────────────────────────────
+                if (save)
+                    _vm.CommitPreviewTask(_previewTask);
+                else
+                    _vm.RemovePreviewTask(_previewTask);
+                _previewTask = null;
+            }
+            else if (_editingTask != null)
+            {
+                // ── Edit mode ────────────────────────────────────────────────────
+                if (!save && _editSnapshot != null)
+                {
+                    // Restore all original values
+                    _editingTask.Name              = _editSnapshot.Name;
+                    _editingTask.Importance        = _editSnapshot.Importance;
+                    _editingTask.Description       = _editSnapshot.Description;
+                    _editingTask.Url               = _editSnapshot.Url;
+                    _editingTask.TickerPoints      = _editSnapshot.TickerPoints;
+                    _editingTask.TickerHours       = _editSnapshot.TickerHours;
+                    _editingTask.TickerLastApplied = _editSnapshot.TickerLastApplied;
+                    _editingTask.Deadline          = _editSnapshot.Deadline;
+                    _editingTask.ManualOrder       = _editSnapshot.ManualOrder;
+                }
+                _vm.EndEditPreview(_editingTask, save);
+            }
+
+            _editingTask  = null;
+            _editSnapshot = null;
+
+            TaskFormPanel.Visibility = Visibility.Collapsed;
+            AddTaskTabBtn.Visibility = Visibility.Visible;
 
             // Restore no-activate so widget doesn't steal focus
             var hwnd = new WindowInteropHelper(this).Handle;
@@ -347,13 +396,44 @@ namespace TaskManagementWidget
         }
 
         private void FormCancelBtn_Click(object sender, RoutedEventArgs e)
-            => CloseTaskForm();
+            => CloseTaskForm(save: false);
+
+        // ── UpdatePreview: push all form values to the active preview/edit task ──
+        private void UpdatePreview()
+        {
+            var target = _editingTask ?? _previewTask;
+            if (target == null) return;
+
+            target.Name        = FormNameBox.Text.Trim();
+            target.Importance  = (int)FormImportanceSlider.Value;
+            target.Description = string.IsNullOrWhiteSpace(FormDescriptionBox.Text)
+                                     ? null : FormDescriptionBox.Text.Trim();
+            target.Url         = string.IsNullOrWhiteSpace(FormUrlBox.Text)
+                                     ? null : FormUrlBox.Text.Trim();
+
+            if (FormDeadlineEnabledBox.IsChecked == true && FormDeadlineCal.SelectedDate.HasValue)
+            {
+                int hourIndex = FormDeadlineHourBox.SelectedIndex < 0 ? 0 : FormDeadlineHourBox.SelectedIndex;
+                target.Deadline = DateTime.SpecifyKind(
+                    FormDeadlineCal.SelectedDate.Value.Date.AddHours(hourIndex),
+                    DateTimeKind.Local).ToUniversalTime();
+            }
+            else
+            {
+                target.Deadline = null;
+            }
+        }
+
+        // Shared handler for fields with no other logic (description, url, hour dropdown)
+        private void FormPreview_Changed(object sender, RoutedEventArgs e)
+            => UpdatePreview();
 
         private void FormNameBox_TextChanged(object sender,
             System.Windows.Controls.TextChangedEventArgs e)
         {
             if (FormSaveBtn != null)
                 FormSaveBtn.IsEnabled = !string.IsNullOrWhiteSpace(FormNameBox.Text);
+            UpdatePreview();
         }
 
         private void FormImportanceSlider_ValueChanged(object sender,
@@ -361,11 +441,15 @@ namespace TaskManagementWidget
         {
             if (FormImportanceLabel != null)
                 FormImportanceLabel.Text = ((int)FormImportanceSlider.Value).ToString();
+            UpdatePreview();
         }
 
         private void FormDeadlineEnabledBox_Changed(object sender, RoutedEventArgs e)
-            => FormDeadlinePanel.Visibility = FormDeadlineEnabledBox.IsChecked == true
+        {
+            FormDeadlinePanel.Visibility = FormDeadlineEnabledBox.IsChecked == true
                 ? Visibility.Visible : Visibility.Collapsed;
+            UpdatePreview();
+        }
 
         private void FormDatePickerBtn_Click(object sender, RoutedEventArgs e)
         {
@@ -380,6 +464,7 @@ namespace TaskManagementWidget
             {
                 FormDateInlineLabel.Text = "Date | " + FormDeadlineCal.SelectedDate.Value.ToString("MM/dd/yyyy");
                 FormDatePopup.IsOpen = false;
+                UpdatePreview();
             }
         }
 
@@ -422,6 +507,10 @@ namespace TaskManagementWidget
 
         private void FormSaveBtn_Click(object sender, RoutedEventArgs e)
         {
+            // Push final form state to the preview task (catches any last-second changes)
+            UpdatePreview();
+
+            // Handle ticker fields (not live-previewed — no card-visible effect)
             int?    tickerPts = null;
             double? tickerHrs = null;
             if (FormTickerEnabledBox.IsChecked == true)
@@ -434,59 +523,32 @@ namespace TaskManagementWidget
                     tickerHrs = hrs;
             }
 
-            DateTime? deadline = null;
-            if (FormDeadlineEnabledBox.IsChecked == true && FormDeadlineCal.SelectedDate.HasValue)
-            {
-                int hourIndex = FormDeadlineHourBox.SelectedIndex < 0 ? 0 : FormDeadlineHourBox.SelectedIndex;
-                var date      = FormDeadlineCal.SelectedDate.Value.Date;
-                deadline = DateTime.SpecifyKind(date.AddHours(hourIndex), DateTimeKind.Local).ToUniversalTime();
-            }
-
             if (_editingTask != null)
             {
-                bool hadTicker            = _editingTask.TickerPoints.HasValue;
-                _editingTask.Name         = FormNameBox.Text.Trim();
-                _editingTask.Importance   = (int)FormImportanceSlider.Value;
-                _editingTask.Description  = string.IsNullOrWhiteSpace(FormDescriptionBox.Text)
-                                                ? null : FormDescriptionBox.Text.Trim();
-                _editingTask.Url          = string.IsNullOrWhiteSpace(FormUrlBox.Text)
-                                                ? null : FormUrlBox.Text.Trim();
+                bool hadTicker = _editSnapshot?.TickerPoints.HasValue ?? false;
                 _editingTask.TickerPoints = tickerPts;
                 _editingTask.TickerHours  = tickerHrs;
-                _editingTask.Deadline     = deadline;
                 if (tickerPts.HasValue && !hadTicker)
                     _editingTask.TickerLastApplied = DateTime.UtcNow;
                 else if (!tickerPts.HasValue)
                     _editingTask.TickerLastApplied = null;
-                _vm.Save();
             }
-            else
+            else if (_previewTask != null)
             {
-                var task = new TaskItem
-                {
-                    Name              = FormNameBox.Text.Trim(),
-                    Importance        = (int)FormImportanceSlider.Value,
-                    Description       = string.IsNullOrWhiteSpace(FormDescriptionBox.Text)
-                                            ? null : FormDescriptionBox.Text.Trim(),
-                    Url               = string.IsNullOrWhiteSpace(FormUrlBox.Text)
-                                            ? null : FormUrlBox.Text.Trim(),
-                    Status            = TaskStatus.ToDo,
-                    TickerPoints      = tickerPts,
-                    TickerHours       = tickerHrs,
-                    TickerLastApplied = tickerPts.HasValue ? DateTime.UtcNow : (DateTime?)null,
-                    Deadline          = deadline
-                };
-                _vm.AddTask(task);
+                _previewTask.TickerPoints      = tickerPts;
+                _previewTask.TickerHours       = tickerHrs;
+                _previewTask.TickerLastApplied = tickerPts.HasValue ? DateTime.UtcNow : (DateTime?)null;
             }
 
-            CloseTaskForm();
+            CloseTaskForm(save: true);
         }
 
         private void FormDeleteBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (_editingTask != null)
-                _vm.DeleteTask(_editingTask);
-            CloseTaskForm();
+            var toDelete = _editingTask;
+            CloseTaskForm(save: false);  // restore snapshot + end preview first
+            if (toDelete != null)
+                _vm.DeleteTask(toDelete);
         }
 
         // ── Per-card drag handlers (reliable: fires when cursor is over the card) ────
