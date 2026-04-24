@@ -84,6 +84,19 @@ namespace TaskManagementWidget.Services
         {
             if (_drive == null) return;
 
+            // Don't sync while the user has an add/edit form open — ReplaceAll would otherwise
+            // wipe the in-flight preview ghost. The next change/timer/manual trigger picks it up.
+            if (_vm.AllTasks.Any(t => t.IsPreview))
+            {
+                // Re-arm the debounce so we try again shortly after the preview commits.
+                Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _debounceTimer.Stop();
+                    _debounceTimer.Start();
+                }));
+                return;
+            }
+
             await _gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {

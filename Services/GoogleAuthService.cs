@@ -13,16 +13,13 @@ namespace TaskManagementWidget.Services
     /// <summary>Google OAuth flow for desktop installed-app. Uses the `drive.file` scope so the
     /// app only sees files it created — no Google verification required, safe for public release.
     ///
-    /// You must paste your OAuth Desktop client credentials into <see cref="ClientId"/> and
-    /// <see cref="ClientSecret"/> below. For installed apps, the secret is not actually
-    /// confidential per Google's documentation.</summary>
-    public static class GoogleAuthService
+    /// Credentials live in the partial-class file <c>GoogleAuthService.Credentials.cs</c>,
+    /// which is gitignored. Copy <c>GoogleAuthService.Credentials.cs.template</c> to
+    /// <c>GoogleAuthService.Credentials.cs</c> and paste your real OAuth Desktop client ID +
+    /// secret to enable sign-in. For installed apps, the secret is not actually confidential
+    /// per Google's documentation — it ships in the binary.</summary>
+    public static partial class GoogleAuthService
     {
-        // ─── OAuth client (from Google Cloud Console → Credentials → OAuth client ID, Desktop) ─
-        // TODO: paste real values before shipping.
-        public const string ClientId     = "PASTE_YOUR_CLIENT_ID.apps.googleusercontent.com";
-        public const string ClientSecret = "PASTE_YOUR_CLIENT_SECRET";
-
         private static readonly string[] Scopes = { DriveService.Scope.DriveFile };
         private const string AppName = "TASKly";
 

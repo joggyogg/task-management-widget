@@ -34,6 +34,9 @@ msix-output/TASKly.cer
 msix-output/Install.bat
 msix-output/Uninstall.bat
 
+# Local OAuth secrets — ships in the binary, but never source-controlled
+Services/GoogleAuthService.Credentials.cs
+
 # Log/scratch files created by build scripts
 *.log
 build_output.txt

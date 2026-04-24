@@ -209,7 +209,20 @@ namespace TaskManagementWidget.ViewModels
                 Save();
         }
 
-        private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => Save();
+        private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            // Don't persist while a preview/edit is mid-flight — the preview ghost is in the
+            // collection but should not hit disk or trigger sync until commit.
+            if (HasActivePreview()) return;
+            Save();
+        }
+
+        private bool HasActivePreview()
+        {
+            foreach (var t in AllTasks)
+                if (t.IsPreview) return true;
+            return false;
+        }
 
         private void RecalculateBadgeColors()
         {
@@ -304,6 +317,11 @@ namespace TaskManagementWidget.ViewModels
         {
             var list = merged.ToList();
 
+            // Preserve any in-flight preview/edit ghosts so the user's add/edit doesn't vanish
+            // mid-action. Their committed counterparts (same Id) take precedence — only ghosts
+            // not represented in the merged set are kept.
+            var previews = AllTasks.Where(t => t.IsPreview).ToList();
+
             // Persist everything (live + tombstones) without re-triggering RequestSync —
             // that's the caller's job (sync engine).
             TaskStorageService.Save(list);
@@ -317,6 +335,13 @@ namespace TaskManagementWidget.ViewModels
                 {
                     Subscribe(t);
                     AllTasks.Add(t);
+                }
+                // Re-attach any preview ghosts that weren't already represented in `merged`.
+                foreach (var p in previews)
+                {
+                    if (list.Any(x => x.Id == p.Id)) continue;
+                    Subscribe(p);
+                    AllTasks.Add(p);
                 }
             }
             finally
