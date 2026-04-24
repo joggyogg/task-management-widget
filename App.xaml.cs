@@ -49,6 +49,17 @@ namespace TaskManagementWidget
 
         protected override void OnExit(ExitEventArgs e)
         {
+            // Best-effort final sync (3s budget) so latest changes hit Drive before close.
+            try
+            {
+                if (TaskManagementWidget.Services.SyncCoordinator.Instance is { } sc)
+                {
+                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    sc.SyncNowAsync(cts.Token).Wait(TimeSpan.FromSeconds(3));
+                }
+            }
+            catch { /* don't block shutdown on sync errors */ }
+
             _instanceMutex?.ReleaseMutex();
             _instanceMutex?.Dispose();
             base.OnExit(e);

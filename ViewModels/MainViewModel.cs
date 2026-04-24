@@ -121,11 +121,35 @@ namespace TaskManagementWidget.ViewModels
         }
 
         // ── Delete a task ────────────────────────────────────────────────────────
+        // Soft delete: stamp a tombstone so the deletion propagates via Drive sync,
+        // then drop the task from the live collection. The tombstone record stays
+        // in tasks.json until the TTL expires (see TaskStorageService).
         public void DeleteTask(TaskItem task)
         {
+            task.DeletedAt = DateTime.UtcNow;
+            task.UpdatedAt = task.DeletedAt.Value;
             Unsubscribe(task);
             AllTasks.Remove(task);
-            Save();
+            // OnCollectionChanged saves AllTasks (live items only); we also need the tombstone
+            // to land on disk, so re-save the union of live + tombstones explicitly.
+            SaveWithTombstones(task);
+        }
+
+        // Includes a soft-deleted task plus all live tasks, then persists.
+        private void SaveWithTombstones(params TaskItem[] tombstones)
+        {
+            var snapshot = new System.Collections.Generic.List<TaskItem>(AllTasks);
+            // Pull in any prior tombstones from disk so we don't lose them on save.
+            foreach (var prior in TaskStorageService.LoadAll())
+                if (prior.DeletedAt != null && !snapshot.Any(s => s.Id == prior.Id))
+                    snapshot.Add(prior);
+            foreach (var t in tombstones)
+                if (!snapshot.Contains(t)) snapshot.Add(t);
+            TaskStorageService.Save(snapshot);
+            if (TaskStorageService.LastSaveError is { } err)
+                System.Windows.MessageBox.Show($"Tasks could not be saved:\n\n{err}",
+                    "Save Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            Services.SyncCoordinator.Instance?.RequestSync();
         }
 
         // ── Reorder a task within its list, inheriting the importance of the item below ─
@@ -256,13 +280,51 @@ namespace TaskManagementWidget.ViewModels
 
         public void Save()
         {
-            TaskStorageService.Save(AllTasks);
+            // Preserve any tombstones (deleted-task records) from disk so that a regular Save()
+            // doesn't wipe them out — they need to stick around until they sync to other devices.
+            var snapshot = new System.Collections.Generic.List<TaskItem>(AllTasks);
+            foreach (var prior in TaskStorageService.LoadAll())
+                if (prior.DeletedAt != null && !snapshot.Any(s => s.Id == prior.Id))
+                    snapshot.Add(prior);
+
+            TaskStorageService.Save(snapshot);
             if (TaskStorageService.LastSaveError is { } err)
                 System.Windows.MessageBox.Show(
                     $"Tasks could not be saved:\n\n{err}",
                     "Save Error",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Warning);
+            Services.SyncCoordinator.Instance?.RequestSync();
+        }
+
+        /// <summary>Replace the entire live task collection with a merged set (e.g. after a sync
+        /// pull). Tombstones in <paramref name="merged"/> are persisted but not shown in the UI.
+        /// Caller is responsible for already having merged remote+local data.</summary>
+        public void ReplaceAll(System.Collections.Generic.IEnumerable<TaskItem> merged)
+        {
+            var list = merged.ToList();
+
+            // Persist everything (live + tombstones) without re-triggering RequestSync —
+            // that's the caller's job (sync engine).
+            TaskStorageService.Save(list);
+
+            _suppressNotifications = true;
+            try
+            {
+                foreach (var t in AllTasks.ToList()) Unsubscribe(t);
+                AllTasks.Clear();
+                foreach (var t in list.Where(x => x.DeletedAt == null))
+                {
+                    Subscribe(t);
+                    AllTasks.Add(t);
+                }
+            }
+            finally
+            {
+                _suppressNotifications = false;
+            }
+
+            RefreshViews();
         }
 
         // ── Live preview management ───────────────────────────────────────────────

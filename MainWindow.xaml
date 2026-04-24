@@ -603,5 +603,78 @@
                 </StackPanel>
             </ScrollViewer>
         </Border>
+
+        <!-- ── First-run welcome overlay (Google Drive sync) ────────────────── -->
+        <Border x:Name="WelcomeOverlay"
+                Grid.Column="1"
+                CornerRadius="24"
+                Background="#F01E1E2E"
+                BorderBrush="#30FFFFFF"
+                BorderThickness="1"
+                VerticalAlignment="Top"
+                Padding="22,22,22,22"
+                Visibility="Collapsed">
+            <StackPanel TextElement.FontFamily="Segoe UI" TextElement.Foreground="#CDD6F4">
+                <TextBlock Text="❤" FontSize="42" Foreground="#F38BA8" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                <TextBlock Text="Welcome to TASKly"
+                           FontSize="18" FontWeight="SemiBold"
+                           Foreground="#CDD6F4"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,10"/>
+                <TextBlock TextWrapping="Wrap"
+                           FontSize="12"
+                           Foreground="#A6ADC8"
+                           TextAlignment="Center"
+                           Margin="0,0,0,16">
+                    Sign in to Google Drive to sync your tasks across all your devices.
+                    A small <Run FontWeight="SemiBold">TASKly</Run> folder will be created in your Drive
+                    and only this app can see it.
+                </TextBlock>
+                <Button x:Name="WelcomeSignInBtn"
+                        Content="Sign in to Google Drive"
+                        Background="{DynamicResource AccentBrush}"
+                        Foreground="#1E1E2E"
+                        BorderThickness="0"
+                        FontWeight="SemiBold"
+                        Cursor="Hand"
+                        HorizontalAlignment="Stretch"
+                        Padding="14,9"
+                        Margin="0,0,0,8"
+                        Click="WelcomeSignInBtn_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <Button x:Name="WelcomeSkipBtn"
+                        Content="Use offline"
+                        Background="Transparent"
+                        Foreground="#6C7086"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        HorizontalAlignment="Center"
+                        Padding="14,7"
+                        Click="WelcomeSkipBtn_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <TextBlock x:Name="WelcomeStatusText"
+                           Text=""
+                           Foreground="#F38BA8"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Margin="0,10,0,0"
+                           Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

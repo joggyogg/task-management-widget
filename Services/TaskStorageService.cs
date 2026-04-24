@@ -17,7 +17,26 @@ namespace TaskManagementWidget.Services
             Converters    = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
         };
 
+        // Tombstones older than this are dropped on load.
+        private static readonly TimeSpan TombstoneTtl = TimeSpan.FromDays(30);
+
+        /// <summary>Load tasks for the UI — tombstones (DeletedAt != null) are filtered out and,
+        /// if older than the TTL, permanently removed from disk.</summary>
         public static List<TaskItem> Load()
+        {
+            var all = LoadAll();
+            var now = DateTime.UtcNow;
+
+            // Drop expired tombstones permanently
+            var kept = all.Where(t => t.DeletedAt == null || (now - t.DeletedAt.Value) < TombstoneTtl).ToList();
+            if (kept.Count != all.Count)
+                Save(kept);
+
+            return kept.Where(t => t.DeletedAt == null).ToList();
+        }
+
+        /// <summary>Load every record on disk including tombstones. Used by the sync engine.</summary>
+        public static List<TaskItem> LoadAll()
         {
             try
             {
@@ -38,6 +57,7 @@ namespace TaskManagementWidget.Services
             {
                 var dir = Path.GetDirectoryName(FilePath)!;
                 Directory.CreateDirectory(dir);
+                // Persist tombstones; only filter out unfinished previews.
                 var json = JsonSerializer.Serialize(tasks.Where(t => !t.IsPreview), JsonOptions);
                 File.WriteAllText(FilePath, json);
                 LastSaveError = null;

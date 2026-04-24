@@ -102,7 +102,7 @@ $manifest = @"
          IgnorableNamespaces="uap uap5 rescap">
   <Identity Name="TASKly"
             Publisher="$publisher"
-            Version="1.0.0.0"
+            Version="1.1.0.0"
             ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>TASKly</DisplayName>
@@ -135,6 +135,7 @@ $manifest = @"
   </Applications>
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
+    <Capability Name="internetClient" />
   </Capabilities>
 </Package>
 "@

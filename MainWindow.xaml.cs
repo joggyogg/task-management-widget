@@ -89,6 +89,14 @@ namespace TaskManagementWidget
             UpdateMaxHeight();
             InitTrayIcon();
 
+            // ── Sync wiring ────────────────────────────────────────────────────
+            TaskManagementWidget.Services.SyncCoordinator.Initialize(_vm);
+            TaskManagementWidget.Services.SyncCoordinator.Instance!.StateChanged += (_, _) =>
+                Dispatcher.BeginInvoke(new Action(UpdateTrayTooltip));
+
+            // Show welcome panel on first run, otherwise try to restore credentials silently.
+            _ = InitGoogleSyncAsync();
+
             // ── Ghost popup driven by GiveFeedback on the drag source ──────────────
             TaskManagementWidget.Controls.TaskCard.DragGhostStarted += task =>
             {
@@ -122,6 +130,20 @@ namespace TaskManagementWidget
             }
 
             var menu = new System.Windows.Forms.ContextMenuStrip();
+
+            _trayAccountItem = new System.Windows.Forms.ToolStripMenuItem("Sign in to Google Drive…");
+            _trayAccountItem.Click += async (_, _) => await OnTrayAccountClicked();
+            menu.Items.Add(_trayAccountItem);
+
+            _traySyncNowItem = new System.Windows.Forms.ToolStripMenuItem("Sync now");
+            _traySyncNowItem.Click += async (_, _) =>
+            {
+                if (TaskManagementWidget.Services.SyncCoordinator.Instance is { } sc)
+                    await sc.SyncNowAsync();
+            };
+            menu.Items.Add(_traySyncNowItem);
+
+            menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
             menu.Items.Add("Exit", null, (_, _) =>
             {
                 _trayIcon.Visible = false;
@@ -133,9 +155,155 @@ namespace TaskManagementWidget
             {
                 Icon             = System.Drawing.Icon.FromHandle(bmp.GetHicon()),
                 Visible          = true,
-                Text             = "Task Widget",
+                Text             = "TASKly",
                 ContextMenuStrip = menu
             };
+
+            UpdateTrayTooltip();
+        }
+
+        // ── Tray sync menu state ────────────────────────────────────────────────
+        private System.Windows.Forms.ToolStripMenuItem _trayAccountItem  = null!;
+        private System.Windows.Forms.ToolStripMenuItem _traySyncNowItem  = null!;
+
+        private void UpdateTrayTooltip()
+        {
+            var s  = TaskManagementWidget.Services.SettingsService.Current;
+            var sc = TaskManagementWidget.Services.SyncCoordinator.Instance;
+
+            if (sc == null || sc.State == TaskManagementWidget.Services.SyncState.Disabled)
+            {
+                if (_trayIcon != null) _trayIcon.Text = "TASKly — Offline";
+                if (_trayAccountItem != null) _trayAccountItem.Text = "Sign in to Google Drive…";
+                if (_traySyncNowItem != null) _traySyncNowItem.Enabled = false;
+                return;
+            }
+
+            string status = sc.State switch
+            {
+                TaskManagementWidget.Services.SyncState.Syncing => "Syncing…",
+                TaskManagementWidget.Services.SyncState.Error   => "Sync error",
+                _ when s.LastSyncUtc.HasValue                   => $"Synced {Humanize(DateTime.UtcNow - s.LastSyncUtc.Value)}",
+                _                                               => "Synced"
+            };
+            // NotifyIcon.Text is limited to 63 chars.
+            if (_trayIcon != null) _trayIcon.Text = Truncate($"TASKly — {status}", 60);
+            if (_trayAccountItem != null) _trayAccountItem.Text = $"Google Drive: {s.UserEmail ?? "signed in"}  •  Sign out";
+            if (_traySyncNowItem != null) _traySyncNowItem.Enabled = sc.State != TaskManagementWidget.Services.SyncState.Syncing;
+        }
+
+        private static string Humanize(TimeSpan ts)
+        {
+            if (ts.TotalSeconds < 60) return "just now";
+            if (ts.TotalMinutes < 60) return $"{(int)ts.TotalMinutes} min ago";
+            if (ts.TotalHours   < 24) return $"{(int)ts.TotalHours} h ago";
+            return $"{(int)ts.TotalDays} d ago";
+        }
+
+        private static string Truncate(string s, int max) => s.Length <= max ? s : s.Substring(0, max);
+
+        private async System.Threading.Tasks.Task OnTrayAccountClicked()
+        {
+            var s  = TaskManagementWidget.Services.SettingsService.Current;
+            var sc = TaskManagementWidget.Services.SyncCoordinator.Instance;
+
+            if (sc != null && sc.State != TaskManagementWidget.Services.SyncState.Disabled)
+            {
+                // Signed in → sign out.
+                var confirm = MessageBox.Show("Sign out of Google Drive?\n\nLocal tasks will remain. You can sign back in any time.",
+                    "Sign out", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (confirm != MessageBoxResult.Yes) return;
+
+                await TaskManagementWidget.Services.GoogleAuthService.SignOutAsync();
+                sc.Disable();
+                UpdateTrayTooltip();
+            }
+            else
+            {
+                // Not signed in → start sign-in.
+                await StartSignInAsync();
+            }
+        }
+
+        // ── First-run welcome / sign-in ──────────────────────────────────────────
+        private async System.Threading.Tasks.Task InitGoogleSyncAsync()
+        {
+            try
+            {
+                var cred = await TaskManagementWidget.Services.GoogleAuthService.TryRestoreAsync();
+                if (cred != null)
+                {
+                    TaskManagementWidget.Services.SyncCoordinator.Instance!.Enable(cred);
+                    _ = TaskManagementWidget.Services.SyncCoordinator.Instance.SyncNowAsync();
+                    UpdateTrayTooltip();
+                    return;
+                }
+            }
+            catch { /* ignore restore failures */ }
+
+            // No restored credential. Show welcome panel only on first run.
+            if (!TaskManagementWidget.Services.SettingsService.Current.FirstRunCompleted
+                && TaskManagementWidget.Services.GoogleAuthService.IsConfigured)
+            {
+                WelcomeOverlay.Visibility = Visibility.Visible;
+            }
+
+            UpdateTrayTooltip();
+        }
+
+        private async System.Threading.Tasks.Task StartSignInAsync()
+        {
+            if (!TaskManagementWidget.Services.GoogleAuthService.IsConfigured)
+            {
+                MessageBox.Show("Google Drive sync is not configured in this build.\n\n" +
+                    "Paste an OAuth Client ID + Secret into GoogleAuthService.cs and rebuild.",
+                    "Sync unavailable", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                if (WelcomeStatusText != null)
+                {
+                    WelcomeStatusText.Text = "Opening browser for sign-in…";
+                    WelcomeStatusText.Visibility = Visibility.Visible;
+                    WelcomeSignInBtn.IsEnabled = false;
+                    WelcomeSkipBtn.IsEnabled   = false;
+                }
+
+                var cred = await TaskManagementWidget.Services.GoogleAuthService.SignInAsync();
+                TaskManagementWidget.Services.SyncCoordinator.Instance!.Enable(cred);
+                TaskManagementWidget.Services.SettingsService.Current.FirstRunCompleted = true;
+                TaskManagementWidget.Services.SettingsService.Save();
+
+                WelcomeOverlay.Visibility = Visibility.Collapsed;
+                _ = TaskManagementWidget.Services.SyncCoordinator.Instance.SyncNowAsync();
+                UpdateTrayTooltip();
+            }
+            catch (Exception ex)
+            {
+                if (WelcomeStatusText != null)
+                {
+                    WelcomeStatusText.Text = $"Sign-in failed: {ex.Message}";
+                    WelcomeStatusText.Visibility = Visibility.Visible;
+                    WelcomeSignInBtn.IsEnabled = true;
+                    WelcomeSkipBtn.IsEnabled   = true;
+                }
+                else
+                {
+                    MessageBox.Show($"Sign-in failed:\n{ex.Message}", "Sign in", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+        }
+
+        private async void WelcomeSignInBtn_Click(object sender, RoutedEventArgs e)
+            => await StartSignInAsync();
+
+        private void WelcomeSkipBtn_Click(object sender, RoutedEventArgs e)
+        {
+            TaskManagementWidget.Services.SettingsService.Current.FirstRunCompleted = true;
+            TaskManagementWidget.Services.SettingsService.Save();
+            WelcomeOverlay.Visibility = Visibility.Collapsed;
         }
 
         protected override void OnSourceInitialized(EventArgs e)

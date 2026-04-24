@@ -21,25 +21,25 @@ namespace TaskManagementWidget.Models
         public string Name
         {
             get => _name;
-            set { _name = value; OnPropertyChanged(); }
+            set { _name = value; OnPropertyChanged(); Touch(); }
         }
 
         public int Importance
         {
             get => _importance;
-            set { _importance = value; OnPropertyChanged(); }
+            set { _importance = value; OnPropertyChanged(); Touch(); }
         }
 
         public string? Description
         {
             get => _description;
-            set { _description = value; OnPropertyChanged(); }
+            set { _description = value; OnPropertyChanged(); Touch(); }
         }
 
         public string? Url
         {
             get => _url;
-            set { _url = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasUrl)); }
+            set { _url = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasUrl)); Touch(); }
         }
 
         [JsonIgnore]
@@ -56,7 +56,7 @@ namespace TaskManagementWidget.Models
         public TaskStatus Status
         {
             get => _status;
-            set { _status = value; OnPropertyChanged(); OnPropertyChanged(nameof(StatusLabel)); }
+            set { _status = value; OnPropertyChanged(); OnPropertyChanged(nameof(StatusLabel)); Touch(); }
         }
 
         [JsonIgnore]
@@ -70,7 +70,7 @@ namespace TaskManagementWidget.Models
         public int ManualOrder
         {
             get => _manualOrder;
-            set { _manualOrder = value; OnPropertyChanged(); }
+            set { _manualOrder = value; OnPropertyChanged(); Touch(); }
         }
 
         private DateTime _createdAt;
@@ -88,14 +88,14 @@ namespace TaskManagementWidget.Models
         public int? TickerPoints
         {
             get => _tickerPoints;
-            set { _tickerPoints = value; OnPropertyChanged(); }
+            set { _tickerPoints = value; OnPropertyChanged(); Touch(); }
         }
 
         /// <summary>Hours between each tick.</summary>
         public double? TickerHours
         {
             get => _tickerHours;
-            set { _tickerHours = value; OnPropertyChanged(); }
+            set { _tickerHours = value; OnPropertyChanged(); Touch(); }
         }
 
         /// <summary>UTC time of the last applied tick (bookkeeping — not displayed).</summary>
@@ -108,7 +108,24 @@ namespace TaskManagementWidget.Models
         public DateTime? Deadline
         {
             get => _deadline;
-            set { _deadline = value; OnPropertyChanged(); }
+            set { _deadline = value; OnPropertyChanged(); Touch(); }
+        }
+
+        // ── Sync metadata ────────────────────────────────────────────────────────
+        /// <summary>UTC timestamp of the most recent meaningful change. Used by the merge engine
+        /// to resolve cross-device conflicts (last write wins).</summary>
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>If non-null, this task has been deleted on this device. The tombstone
+        /// propagates via sync so other devices apply the deletion. Cleaned up after 30 days.</summary>
+        public DateTime? DeletedAt { get; set; }
+
+        /// <summary>Internal helper — bumps UpdatedAt during a setter, but never while a preview
+        /// edit is in progress (those bumps happen at commit time).</summary>
+        private void Touch()
+        {
+            if (_isPreview) return;
+            UpdatedAt = DateTime.UtcNow;
         }
 
         private bool _isPreview;
